@@ -6,6 +6,8 @@ import Dashboard from './views/Dashboard';
 import Shop from './views/Shop';
 import Collection from './views/Collection';
 import Leaderboard from './views/Leaderboard';
+import Marketplace from './views/Marketplace';
+import QuestsAndAchievements from './views/QuestsAndAchievements';
 import Login from './views/Login';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -43,6 +45,8 @@ const RouterRoutes: React.FC = () => {
       <Route path="/" element={<Dashboard />} />
       <Route path="/shop" element={<Shop />} />
       <Route path="/collection" element={<Collection />} />
+      <Route path="/marketplace" element={<Marketplace />} />
+      <Route path="/quests" element={<QuestsAndAchievements />} />
       <Route path="/leaderboard" element={<Leaderboard />} />
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>

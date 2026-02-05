@@ -1,6 +1,3 @@
-// Safely access environment variables
-const env = (import.meta as any)?.env || {};
-
 export const SUPABASE_URL = 'https://eqhuacksgeqywlvtyely.supabase.co';
 export const SUPABASE_ANON_KEY = 'sb_publishable_n6zRl0hcxM3RxICC5yWGAA_Sv0HWlha'; 
 
@@ -31,4 +28,4 @@ export const MILL_VALUES: Record<string, number> = {
   Divine: 1000
 };
 
-export const CARD_BACK_IMAGE = 'https://via.placeholder.com/300x420?text=FryCards';
+export const CARD_BACK_IMAGE = 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=600&auto=format&fit=crop';

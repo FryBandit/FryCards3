@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { LeaderboardEntry } from '../types';
 import { Crown, Layers, Zap, Package } from 'lucide-react';
@@ -7,15 +7,27 @@ const Leaderboard: React.FC = () => {
   const [type, setType] = useState<'collection' | 'level' | 'packs_opened'>('collection');
   const [data, setData] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
     setLoading(true);
     // Calls the existing RPC with the type string: 'collection', 'level', or 'packs_opened'
     supabase.rpc('get_leaderboard', { p_type: type, p_limit: 50 }).then(({ data, error }) => {
-      if (!error) setData(data || []);
-      else console.error(error);
-      setLoading(false);
+      if (ignore) return;
+      if (!error) {
+        if (mountedRef.current) setData(data || []);
+      } else {
+        console.error(error);
+      }
+      if (mountedRef.current) setLoading(false);
     });
+    return () => { ignore = true; };
   }, [type]);
 
   const getIcon = () => {

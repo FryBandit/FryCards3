@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
-import { Home, ShoppingBag, Layers, BarChart2, Menu, X, Coins, Diamond, LogOut } from 'lucide-react';
+import { Home, ShoppingBag, Layers, BarChart2, Menu, X, Coins, Diamond, LogOut, Store, Target } from 'lucide-react';
 
 const Navbar: React.FC = () => {
   const { user, dashboard, signOut } = useGame();
@@ -12,7 +12,9 @@ const Navbar: React.FC = () => {
   const links = [
     { to: '/', label: 'Dashboard', icon: Home },
     { to: '/shop', label: 'Pack Shop', icon: ShoppingBag },
+    { to: '/marketplace', label: 'Marketplace', icon: Store },
     { to: '/collection', label: 'Collection', icon: Layers },
+    { to: '/quests', label: 'Quests', icon: Target },
     { to: '/leaderboard', label: 'Leaderboard', icon: BarChart2 },
   ];
 
@@ -29,7 +31,7 @@ const Navbar: React.FC = () => {
           </div>
 
           {/* Desktop Nav */}
-          <div className="hidden md:flex items-center gap-6">
+          <div className="hidden md:flex items-center gap-2">
             {links.map(link => (
               <NavLink 
                 key={link.to} 
@@ -40,8 +42,8 @@ const Navbar: React.FC = () => {
                   }`
                 }
               >
-                <link.icon size={18} />
-                <span className="font-medium text-sm">{link.label}</span>
+                <link.icon size={16} />
+                <span className="font-medium text-xs uppercase tracking-wide">{link.label}</span>
               </NavLink>
             ))}
           </div>
