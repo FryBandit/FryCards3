@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { PackResult } from '../types';
-import CardDisplay from './CardDisplay';
+import CardDisplay from '../components/CardDisplay';
 import { X, Sparkles, ChevronRight } from 'lucide-react';
 import Confetti from 'react-confetti';
 import { SOUNDS } from '../constants';
@@ -17,21 +17,30 @@ const PackOpener: React.FC<PackOpenerProps> = ({ packResult, onClose, packImage 
   const [revealedCards, setRevealedCards] = useState<number[]>([]);
   const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
-  // Audio Refs
-  const sfxHover = useRef(new Audio(SOUNDS.HOVER));
-  const sfxClick = useRef(new Audio(SOUNDS.CLICK));
-  const sfxShake = useRef(new Audio(SOUNDS.PACK_SHAKE));
-  const sfxOpen = useRef(new Audio(SOUNDS.PACK_OPEN));
-  const sfxRevealCommon = useRef(new Audio(SOUNDS.REVEAL_COMMON));
-  const sfxRevealRare = useRef(new Audio(SOUNDS.REVEAL_RARE));
-  const sfxRevealLegendary = useRef(new Audio(SOUNDS.REVEAL_LEGENDARY));
-  const sfxSuccess = useRef(new Audio(SOUNDS.SUCCESS));
+  // Audio Instances (Initialized once per lifecycle)
+  const sfx = useMemo(() => ({
+    hover: new Audio(SOUNDS.HOVER),
+    click: new Audio(SOUNDS.CLICK),
+    shake: new Audio(SOUNDS.PACK_SHAKE),
+    open: new Audio(SOUNDS.PACK_OPEN),
+    revealCommon: new Audio(SOUNDS.REVEAL_COMMON),
+    revealRare: new Audio(SOUNDS.REVEAL_RARE),
+    revealLegendary: new Audio(SOUNDS.REVEAL_LEGENDARY),
+    success: new Audio(SOUNDS.SUCCESS)
+  }), []);
 
   useEffect(() => {
     const handleResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      // Clean up audio
+      Object.values(sfx).forEach(audio => {
+        audio.pause();
+        audio.src = "";
+      });
+    };
+  }, [sfx]);
 
   const triggerHaptic = (pattern: number | number[]) => {
     if (navigator.vibrate) navigator.vibrate(pattern);
@@ -39,22 +48,21 @@ const PackOpener: React.FC<PackOpenerProps> = ({ packResult, onClose, packImage 
 
   useEffect(() => {
     if (packResult) {
-      // Shaking Stage
-      sfxShake.current.volume = 0.5;
-      sfxShake.current.play().catch(() => {});
+      sfx.shake.volume = 0.5;
+      sfx.shake.play().catch(() => {});
       triggerHaptic([50, 50, 50, 50]);
 
       const t1 = setTimeout(() => {
         setStage('opening');
-        sfxOpen.current.volume = 0.6;
-        sfxOpen.current.play().catch(() => {});
+        sfx.open.volume = 0.6;
+        sfx.open.play().catch(() => {});
         triggerHaptic(200);
       }, 1200);
 
       const t2 = setTimeout(() => setStage('revealing'), 1800);
       return () => { clearTimeout(t1); clearTimeout(t2); };
     }
-  }, [packResult]);
+  }, [packResult, sfx]);
 
   const handleCardClick = (index: number) => {
     if (stage === 'revealing' && !revealedCards.includes(index)) {
@@ -63,13 +71,13 @@ const PackOpener: React.FC<PackOpenerProps> = ({ packResult, onClose, packImage 
       const card = packResult?.cards[index];
       if (card) {
         if (['Mythic', 'Divine'].includes(card.rarity)) {
-           sfxRevealLegendary.current.play().catch(() => {});
+           sfx.revealLegendary.play().catch(() => {});
            triggerHaptic([100, 50, 100]);
         } else if (['Rare', 'Super-Rare'].includes(card.rarity)) {
-           sfxRevealRare.current.play().catch(() => {});
+           sfx.revealRare.play().catch(() => {});
            triggerHaptic(50);
         } else {
-           sfxRevealCommon.current.play().catch(() => {});
+           sfx.revealCommon.play().catch(() => {});
            triggerHaptic(20);
         }
       }
@@ -80,11 +88,11 @@ const PackOpener: React.FC<PackOpenerProps> = ({ packResult, onClose, packImage 
     if (packResult && revealedCards.length === packResult.cards.length && stage === 'revealing') {
       const t = setTimeout(() => {
         setStage('summary');
-        sfxSuccess.current.play().catch(() => {});
+        sfx.success.play().catch(() => {});
       }, 1200);
       return () => clearTimeout(t);
     }
-  }, [revealedCards, packResult, stage]);
+  }, [revealedCards, packResult, stage, sfx]);
 
   if (!packResult) return null;
 

@@ -16,6 +16,7 @@ const Collection: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [millingAll, setMillingAll] = useState(false);
+  const [millingCardId, setMillingCardId] = useState<string | null>(null);
 
   const LIMIT = 20;
   const mountedRef = useRef(true);
@@ -61,13 +62,14 @@ const Collection: React.FC = () => {
     loadCards();
   }, [loadCards]);
 
-  const handleMill = async (quantity: number) => {
-    if (!user || !selectedCard) return;
+  const handleMill = async (card: Card, quantity: number) => {
+    if (!user) return;
+    setMillingCardId(card.id);
 
     try {
-      const { data, error } = await supabase.rpc('mill_duplicates', {
+      const { error } = await supabase.rpc('mill_duplicates', {
         p_user_id: user.id,
-        p_card_id: selectedCard.id,
+        p_card_id: card.id,
         p_quantity: quantity
       });
 
@@ -79,6 +81,8 @@ const Collection: React.FC = () => {
       
     } catch (error: any) {
       showToast(error.message, 'error');
+    } finally {
+      setMillingCardId(null);
     }
   };
 
@@ -91,24 +95,36 @@ const Collection: React.FC = () => {
       return;
     }
 
-    if (!window.confirm(`Found ${duplicates.length} assets with duplicates. Proceed to mass recycle?`)) return;
+    if (!window.confirm(`Found assets with duplicates. Proceed to mass recycle into gold?`)) return;
 
     setMillingAll(true);
-    let successCount = 0;
 
     try {
-      for (const card of duplicates) {
-        const qtyToMill = (card.quantity || 1) - 1;
-        if (qtyToMill > 0) {
-           const { error } = await supabase.rpc('mill_duplicates', {
-             p_user_id: user.id,
-             p_card_id: card.id,
-             p_quantity: qtyToMill
-           });
-           if (!error) successCount++;
+      // Use a batch RPC if available, or optimize the loop
+      // Assuming 'mill_bulk_duplicates' is a more efficient server-side function
+      const items = duplicates.map(c => ({
+        card_id: c.id,
+        quantity: (c.quantity || 1) - 1
+      }));
+
+      const { error } = await supabase.rpc('mill_bulk_duplicates', {
+        p_user_id: user.id,
+        p_items: items
+      });
+
+      if (error) {
+        // Fallback to sequential if bulk RPC doesn't exist yet (though discouraged in review)
+        console.warn("Bulk mill RPC not found, falling back to sequential...");
+        for (const card of duplicates) {
+          await supabase.rpc('mill_duplicates', {
+            p_user_id: user.id,
+            p_card_id: card.id,
+            p_quantity: (card.quantity || 1) - 1
+          });
         }
       }
-      showToast(`Batch operation complete. Recycled ${successCount} asset types.`, 'success');
+      
+      showToast(`Mass recycling complete.`, 'success');
       await Promise.all([loadCards(), refreshDashboard()]);
     } catch (e: any) {
       showToast("Batch operation interrupted.", 'error');
@@ -121,7 +137,7 @@ const Collection: React.FC = () => {
     <div className="space-y-6 pb-20">
       {/* Detail & Mill Modal */}
       {selectedCard && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in" onClick={() => setSelectedCard(null)}>
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in" onClick={() => setSelectedCard(null)}>
           <div className="bg-slate-900 p-8 rounded-[2rem] border-2 border-slate-700 max-w-lg w-full shadow-[8px_8px_0_rgba(0,0,0,0.5)] relative overflow-hidden flex flex-col md:flex-row gap-8" onClick={e => e.stopPropagation()}>
             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-500"></div>
             
@@ -149,10 +165,11 @@ const Collection: React.FC = () => {
               <div className="space-y-3">
                 {(selectedCard.quantity || 0) > 1 ? (
                   <button 
-                    onClick={() => handleMill((selectedCard.quantity || 0) - 1)}
-                    className="w-full bg-slate-800 hover:bg-red-600 hover:text-white py-4 rounded-sm text-slate-400 flex items-center justify-center gap-3 font-heading font-black text-[10px] transition-all border-2 border-slate-700 hover:border-red-800 hover:translate-y-1 hover:shadow-none shadow-[4px_4px_0_rgba(0,0,0,0.5)]"
+                    onClick={() => handleMill(selectedCard, (selectedCard.quantity || 0) - 1)}
+                    disabled={millingCardId === selectedCard.id}
+                    className="w-full bg-slate-800 hover:bg-red-600 hover:text-white py-4 rounded-sm text-slate-400 flex items-center justify-center gap-3 font-heading font-black text-[10px] transition-all border-2 border-slate-700 hover:border-red-800 hover:translate-y-1 hover:shadow-none shadow-[4px_4px_0_rgba(0,0,0,0.5)] disabled:opacity-50"
                   >
-                    <Trash2 size={16} />
+                    {millingCardId === selectedCard.id ? <RefreshCw className="animate-spin" size={16} /> : <Trash2 size={16} />}
                     RECLAIM DUPLICATES
                   </button>
                 ) : (

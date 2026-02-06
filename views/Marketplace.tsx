@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 import { useGame } from '../context/GameContext';
 import { MarketListing, Card } from '../types';
 import CardDisplay from '../components/CardDisplay';
-import { Search, Filter, Gavel, Plus, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Filter, Gavel, Plus, X, ChevronLeft, ChevronRight, Activity } from 'lucide-react';
 import { RARITY_COLORS } from '../constants';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -65,6 +65,23 @@ const Marketplace: React.FC = () => {
 
   useEffect(() => {
     fetchListings();
+
+    // Subscribe to realtime updates
+    const channel = supabase
+      .channel('marketplace_changes')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'market_listings' 
+      }, () => {
+        // Simple refresh on any change - more efficient than manual diffing for small lists
+        fetchListings();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchListings]);
 
   const loadUserCards = async () => {
@@ -187,7 +204,8 @@ const Marketplace: React.FC = () => {
             GLOBAL <span className="text-indigo-500">MARKET</span>
           </h1>
           <div className="flex items-center gap-2 mt-2">
-            <p className="text-slate-500 font-medium font-mono">Trade cards securely on the decentralized exchange.</p>
+            <Activity className="text-indigo-500 animate-pulse" size={14} />
+            <p className="text-slate-500 font-medium font-mono text-[10px] uppercase tracking-widest">LIVE TRADING NETWORK ACTIVE</p>
           </div>
         </div>
         <button 
@@ -334,7 +352,7 @@ const Marketplace: React.FC = () => {
 
       {/* Bid Modal */}
       {selectedListing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setSelectedListing(null)}>
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setSelectedListing(null)}>
           <div className="bg-slate-900 p-8 rounded-[2rem] border border-amber-500/30 max-w-md w-full shadow-2xl relative" onClick={e => e.stopPropagation()}>
              <h3 className="text-2xl font-heading font-black text-white mb-2">PLACE BID</h3>
              <p className="text-slate-400 text-sm mb-6 font-mono">Enter your offer for <span className="text-white font-bold">{selectedListing.card.name}</span></p>
@@ -369,7 +387,7 @@ const Marketplace: React.FC = () => {
 
       {/* Create Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
            <div className="bg-slate-900 rounded-[2rem] p-8 max-w-4xl w-full border border-slate-700 relative flex flex-col md:flex-row gap-8 h-[90vh] md:h-auto md:max-h-[90vh]">
               <button onClick={() => setShowCreateModal(false)} className="absolute top-4 right-4 p-2 bg-slate-800 rounded-full hover:bg-slate-700 text-white transition-colors z-10"><X size={20} /></button>
               

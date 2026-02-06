@@ -1,4 +1,5 @@
 
+
 export interface Profile {
   id: string;
   username: string;
@@ -26,6 +27,26 @@ export interface Card {
   set_name?: string;
   is_foil?: boolean;
   first_acquired?: string;
+  hp?: number;
+  attack?: number;
+  defense?: number;
+}
+
+export interface Deck {
+  id: string;
+  name: string;
+  card_ids: string[];
+  cards?: Card[];
+  created_at: string;
+}
+
+export interface BattleState {
+  playerHP: number;
+  opponentHP: number;
+  turn: 'player' | 'opponent';
+  log: string[];
+  isFinished: boolean;
+  winner?: 'player' | 'opponent';
 }
 
 export interface PackType {
@@ -52,6 +73,31 @@ export interface Mission {
   completion_percentage: number;
 }
 
+// Added Quest interface for QuestsAndAchievements view
+export interface Quest {
+  id: string;
+  title: string;
+  description: string;
+  status: 'in_progress' | 'completed' | 'claimed';
+  difficulty: 'easy' | 'medium' | 'hard' | 'legendary';
+  current_value: number;
+  target_value: number;
+  reward_gold: number;
+  reward_gems: number;
+  reward_xp: number;
+}
+
+// Added Achievement interface for QuestsAndAchievements view
+export interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  is_unlocked: boolean;
+  unlocked_at: string | null;
+  reward_gold: number;
+  reward_gems: number;
+}
+
 export interface DashboardData {
   profile: Profile;
   stats: {
@@ -75,7 +121,6 @@ export interface PackResult {
   next_pity_in: number;
 }
 
-// Fix: Added missing AffordabilityCheck interface required by Shop.tsx
 export interface AffordabilityCheck {
   can_afford: boolean;
   gold_needed: number;
@@ -98,37 +143,6 @@ export interface MarketListing {
   created_at: string;
   status: 'active' | 'sold' | 'expired' | 'cancelled';
   high_bidder_id?: string;
-}
-
-export interface Quest {
-  id: string;
-  user_id: string;
-  template_id: string;
-  title: string;
-  description: string;
-  quest_type: string;
-  target_value: number;
-  current_value: number;
-  reward_gold: number;
-  reward_gems: number;
-  reward_xp: number;
-  status: 'active' | 'completed' | 'claimed';
-  expires_at?: string;
-  difficulty: 'easy' | 'medium' | 'hard' | 'legendary';
-}
-
-export interface Achievement {
-  id: string;
-  title: string;
-  description: string;
-  icon_url?: string;
-  condition_type: string;
-  target_value: number;
-  reward_gold: number;
-  reward_gems: number;
-  is_unlocked: boolean;
-  unlocked_at?: string;
-  progress?: number;
 }
 
 export interface DailyRewardResult {

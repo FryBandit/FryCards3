@@ -1,77 +1,81 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
-import { Home, ShoppingBag, Layers, BarChart2, Menu, X, Coins, Diamond, LogOut, Store, Target } from 'lucide-react';
+import { Home, ShoppingBag, Layers, BarChart2, Menu, X, Coins, Diamond, LogOut, Store, Sword, Layout } from 'lucide-react';
 
 const Navbar: React.FC = () => {
   const { user, dashboard, signOut } = useGame();
   const [isOpen, setIsOpen] = useState(false);
 
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
+
   if (!user) return null;
 
   const links = [
-    { to: '/', label: 'Dashboard', icon: Home },
-    { to: '/shop', label: 'Pack Shop', icon: ShoppingBag },
-    { to: '/marketplace', label: 'Marketplace', icon: Store },
-    { to: '/collection', label: 'Collection', icon: Layers },
-    { to: '/quests', label: 'Quests', icon: Target },
-    { to: '/leaderboard', label: 'Leaderboard', icon: BarChart2 },
+    { to: '/', label: 'Home', icon: Home },
+    { to: '/shop', label: 'Packs', icon: ShoppingBag },
+    { to: '/marketplace', label: 'Market', icon: Store },
+    { to: '/collection', label: 'Cards', icon: Layers },
+    { to: '/decks', label: 'Decks', icon: Layout },
+    { to: '/battle', label: 'Battle', icon: Sword },
+    { to: '/leaderboard', label: 'Ranks', icon: BarChart2 },
   ];
 
   return (
-    <nav className="bg-slate-900 border-b border-slate-800 sticky top-0 z-40">
+    <nav className="bg-slate-900 border-b border-slate-800 sticky top-0 z-[1000]">
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center h-16">
-          {/* Logo */}
           <div className="flex items-center gap-2">
             <span className="text-2xl font-heading font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
               FC
             </span>
-            <span className="hidden md:block font-heading font-bold text-white tracking-widest">FRYCARDS</span>
+            <span className="hidden md:block font-heading font-bold text-white tracking-widest text-[10px]">FRYCARDS</span>
           </div>
 
-          {/* Desktop Nav */}
-          <div className="hidden md:flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-1">
             {links.map(link => (
               <NavLink 
                 key={link.to} 
                 to={link.to}
                 className={({ isActive }) => 
-                  `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
-                    isActive ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  `flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
+                    isActive ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800'
                   }`
                 }
               >
-                <link.icon size={16} />
-                <span className="font-medium text-xs uppercase tracking-wide">{link.label}</span>
+                <link.icon size={14} />
+                <span className="font-bold text-[9px] uppercase tracking-wider">{link.label}</span>
               </NavLink>
             ))}
           </div>
 
-          {/* User Stats / Mobile Toggle */}
           <div className="flex items-center gap-4">
-            {dashboard && dashboard.profile ? (
-              <div className="flex items-center gap-3 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700">
+            {dashboard && dashboard.profile && (
+              <div className="flex items-center gap-3 bg-slate-950 px-3 py-1.5 rounded-sm border border-slate-800 shadow-inner">
                  <div className="flex items-center gap-1">
-                   <Coins size={16} className="text-yellow-400" />
-                   <span className="text-sm font-mono">{dashboard.profile.gold_balance.toLocaleString()}</span>
+                   <Coins size={12} className="text-yellow-400" />
+                   <span className="text-[10px] font-mono font-bold text-slate-200">{dashboard.profile.gold_balance.toLocaleString()}</span>
                  </div>
-                 <div className="w-px h-4 bg-slate-600"></div>
+                 <div className="w-px h-3 bg-slate-800"></div>
                  <div className="flex items-center gap-1">
-                   <Diamond size={16} className="text-cyan-400" />
-                   <span className="text-sm font-mono">{dashboard.profile.gem_balance.toLocaleString()}</span>
+                   <Diamond size={12} className="text-cyan-400" />
+                   <span className="text-[10px] font-mono font-bold text-slate-200">{dashboard.profile.gem_balance.toLocaleString()}</span>
                  </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700 animate-pulse">
-                <div className="w-16 h-4 bg-slate-700 rounded"></div>
-                <div className="w-px h-4 bg-slate-600"></div>
-                <div className="w-16 h-4 bg-slate-700 rounded"></div>
               </div>
             )}
             
-            <button onClick={signOut} className="hidden md:block text-slate-400 hover:text-red-400">
-               <LogOut size={20} />
+            <button onClick={signOut} className="hidden md:block text-slate-500 hover:text-red-400 transition-colors">
+               <LogOut size={16} />
             </button>
 
             <button onClick={() => setIsOpen(!isOpen)} className="md:hidden text-white">
@@ -81,9 +85,8 @@ const Navbar: React.FC = () => {
         </div>
       </div>
 
-      {/* Mobile Menu */}
       {isOpen && (
-        <div className="md:hidden bg-slate-800 border-t border-slate-700">
+        <div className="md:hidden fixed inset-0 top-16 bg-slate-900 border-t border-slate-800 animate-fade-in z-[999] overflow-y-auto">
           <div className="flex flex-col p-4 gap-2">
             {links.map(link => (
               <NavLink 
@@ -91,21 +94,21 @@ const Navbar: React.FC = () => {
                 to={link.to}
                 onClick={() => setIsOpen(false)}
                 className={({ isActive }) => 
-                  `flex items-center gap-3 px-4 py-3 rounded-lg ${
-                    isActive ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-700'
+                  `flex items-center gap-3 px-4 py-4 rounded-lg font-bold text-xs uppercase tracking-widest ${
+                    isActive ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'
                   }`
                 }
               >
-                <link.icon size={20} />
+                <link.icon size={18} />
                 <span>{link.label}</span>
               </NavLink>
             ))}
             <button 
-              onClick={signOut}
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-red-500/20 hover:text-red-400 text-left"
+              onClick={() => { signOut(); setIsOpen(false); }} 
+              className="flex items-center gap-3 px-4 py-4 rounded-lg font-bold text-xs uppercase tracking-widest text-red-400 hover:bg-red-400/10 mt-4"
             >
-              <LogOut size={20} />
-              <span>Sign Out</span>
+               <LogOut size={18} />
+               <span>Logout</span>
             </button>
           </div>
         </div>
