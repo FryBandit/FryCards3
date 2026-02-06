@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { supabase } from '../supabaseClient';
@@ -24,14 +25,25 @@ const Dashboard: React.FC = () => {
     </div>
   );
 
-  if (!dashboard) return (
+  if (!dashboard || !dashboard.profile) return (
     <div className="min-h-[60vh] flex flex-col items-center justify-center text-slate-500">
        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
        <p className="font-heading font-bold animate-pulse">ESTABLISHING CONNECTION...</p>
     </div>
   );
 
-  const { profile, stats, missions } = dashboard;
+  const { profile, stats, missions = [] } = dashboard;
+  
+  // Safe defaults for stats
+  const safeStats = stats || {
+    total_cards: 0,
+    unique_cards: 0,
+    total_possible: 100,
+    completion_percentage: 0,
+    rarity_breakdown: [],
+    set_completion: []
+  };
+
   const xpNeeded = profile.level * 100;
   const progress = (profile.xp % 100);
 
@@ -46,7 +58,7 @@ const Dashboard: React.FC = () => {
         </div>
         <div className="text-right">
            <div className="text-[10px] font-bold text-slate-500 uppercase">Collection Progress</div>
-           <div className="text-2xl font-heading font-bold text-indigo-400">{stats.completion_percentage}%</div>
+           <div className="text-2xl font-heading font-bold text-indigo-400">{safeStats.completion_percentage}%</div>
         </div>
       </div>
 
@@ -76,7 +88,7 @@ const Dashboard: React.FC = () => {
             <div className="grid grid-cols-3 gap-4 mt-10">
                <div className="bg-slate-950/40 p-4 rounded-2xl border border-slate-800/50">
                   <div className="text-[10px] text-slate-500 uppercase mb-1">Assets</div>
-                  <div className="text-xl font-heading font-bold text-white">{stats.unique_cards}</div>
+                  <div className="text-xl font-heading font-bold text-white">{safeStats.unique_cards}</div>
                </div>
                <div className="bg-slate-950/40 p-4 rounded-2xl border border-slate-800/50">
                   <div className="text-[10px] text-slate-500 uppercase mb-1">Packs</div>
@@ -112,7 +124,7 @@ const Dashboard: React.FC = () => {
       <div className="glass rounded-3xl p-8 border border-slate-700/50">
         <h2 className="text-2xl font-heading font-black mb-8 flex items-center gap-3"><Target className="text-red-500" size={28} /> ACTIVE MISSIONS</h2>
         <div className="grid grid-cols-1 gap-4">
-          {missions.map(m => (
+          {missions.length > 0 ? missions.map(m => (
             <div key={m.id} className="bg-slate-900/40 p-6 rounded-2xl border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-6">
                <div className="flex-1 w-full">
                  <h4 className="font-bold text-lg text-white mb-2">{m.description}</h4>
@@ -126,7 +138,9 @@ const Dashboard: React.FC = () => {
                  <div className="text-slate-600 font-bold uppercase text-xs">{m.is_completed ? 'COMPLETE' : `${m.progress}/${m.target}`}</div>
                )}
             </div>
-          ))}
+          )) : (
+            <p className="text-slate-500 text-center py-4 italic">No active missions available.</p>
+          )}
         </div>
       </div>
     </div>

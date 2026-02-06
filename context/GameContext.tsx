@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { User } from '@supabase/supabase-js';
@@ -40,7 +41,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         p_user_id: user.id,
       });
       
-      if (!rpcError && data) {
+      if (!rpcError && data && data.stats) {
         if (mountedRef.current) setDashboard(data);
         return;
       }
@@ -80,7 +81,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         p_user_id: user.id,
       });
 
-      if (retryData && mountedRef.current) {
+      if (retryData && retryData.stats && mountedRef.current) {
         setDashboard(retryData);
       } else {
         const fallback: DashboardData = {
