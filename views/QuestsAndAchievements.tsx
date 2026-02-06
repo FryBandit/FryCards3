@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { useGame } from '../context/GameContext';
@@ -38,7 +39,6 @@ const QuestsAndAchievements: React.FC = () => {
     if (!user) return;
     try {
       const { error } = await supabase.rpc('claim_quest_reward', {
-        p_user_id: user.id,
         p_quest_id: questId
       });
       if (error) throw error;

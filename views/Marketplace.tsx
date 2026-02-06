@@ -148,7 +148,6 @@ const Marketplace: React.FC = () => {
 
     try {
       const { error } = await supabase.rpc('buy_market_listing', {
-        p_user_id: user.id,
         p_listing_id: listing.id
       });
 
@@ -178,9 +177,9 @@ const Marketplace: React.FC = () => {
 
     try {
       const { error } = await supabase.rpc('place_bid', {
-        p_user_id: user.id,
         p_listing_id: selectedListing.id,
-        p_amount: bidAmount
+        p_bid_gold: selectedListing.currency === 'gold' ? bidAmount : 0,
+        p_bid_gems: selectedListing.currency === 'gems' ? bidAmount : 0
       });
 
       if (error) throw error;

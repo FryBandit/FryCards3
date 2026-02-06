@@ -10,6 +10,12 @@ import Leaderboard from './views/Leaderboard';
 import Marketplace from './views/Marketplace';
 import QuestsAndAchievements from './views/QuestsAndAchievements';
 import Login from './views/Login';
+import Decks from './views/Decks';
+import BattleArena from './views/BattleArena';
+import Friends from './views/Friends';
+import Trading from './views/Trading';
+import ItemShop from './views/ItemShop';
+import UserProfile from './views/UserProfile';
 import Toast from './components/Toast';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -46,8 +52,14 @@ const RouterRoutes: React.FC = () => {
     <Routes>
       <Route path="/" element={<Dashboard />} />
       <Route path="/shop" element={<Shop />} />
+      <Route path="/items" element={<ItemShop />} />
       <Route path="/collection" element={<Collection />} />
+      <Route path="/decks" element={<Decks />} />
+      <Route path="/battle" element={<BattleArena />} />
       <Route path="/marketplace" element={<Marketplace />} />
+      <Route path="/trading" element={<Trading />} />
+      <Route path="/friends" element={<Friends />} />
+      <Route path="/profile" element={<UserProfile />} />
       <Route path="/quests" element={<QuestsAndAchievements />} />
       <Route path="/leaderboard" element={<Leaderboard />} />
       <Route path="*" element={<Navigate to="/" />} />

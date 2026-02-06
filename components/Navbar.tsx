@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
-import { Home, ShoppingBag, Layers, BarChart2, Menu, X, Coins, Diamond, LogOut, Store, Sword, Layout } from 'lucide-react';
+import { Home, ShoppingBag, Layers, BarChart2, Menu, X, Coins, Diamond, LogOut, Store, Sword, Layout, Users, Repeat, Shirt, User as UserIcon } from 'lucide-react';
 
 const Navbar: React.FC = () => {
   const { user, dashboard, signOut } = useGame();
@@ -22,13 +22,16 @@ const Navbar: React.FC = () => {
   if (!user) return null;
 
   const links = [
-    { to: '/', label: 'Home', icon: Home },
-    { to: '/shop', label: 'Packs', icon: ShoppingBag },
-    { to: '/marketplace', label: 'Market', icon: Store },
-    { to: '/collection', label: 'Cards', icon: Layers },
-    { to: '/decks', label: 'Decks', icon: Layout },
-    { to: '/battle', label: 'Battle', icon: Sword },
-    { to: '/leaderboard', label: 'Ranks', icon: BarChart2 },
+    { to: '/', label: 'Base', icon: Home },
+    { to: '/shop', label: 'Pack', icon: ShoppingBag },
+    { to: '/items', label: 'Item', icon: Shirt },
+    { to: '/collection', label: 'Card', icon: Layers },
+    { to: '/decks', label: 'Deck', icon: Layout },
+    { to: '/battle', label: 'War', icon: Sword },
+    { to: '/trading', label: 'Swap', icon: Repeat },
+    { to: '/marketplace', label: 'Mkt', icon: Store },
+    { to: '/friends', label: 'Net', icon: Users },
+    { to: '/leaderboard', label: 'Top', icon: BarChart2 },
   ];
 
   return (
@@ -42,7 +45,7 @@ const Navbar: React.FC = () => {
             <span className="hidden md:block font-heading font-bold text-white tracking-widest text-[10px]">FRYCARDS</span>
           </div>
 
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden xl:flex items-center gap-1">
             {links.map(link => (
               <NavLink 
                 key={link.to} 
@@ -74,11 +77,19 @@ const Navbar: React.FC = () => {
               </div>
             )}
             
+            <NavLink to="/profile" className={({isActive}) => `hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${isActive ? 'bg-slate-800 border-indigo-500 text-white' : 'border-slate-700 text-slate-400 hover:text-white'}`}>
+               {dashboard?.profile?.avatar_url ? (
+                 <img src={dashboard.profile.avatar_url} alt="Avatar" className="w-6 h-6 rounded-full object-cover" />
+               ) : (
+                 <UserIcon size={16} />
+               )}
+            </NavLink>
+
             <button onClick={signOut} className="hidden md:block text-slate-500 hover:text-red-400 transition-colors">
                <LogOut size={16} />
             </button>
 
-            <button onClick={() => setIsOpen(!isOpen)} className="md:hidden text-white">
+            <button onClick={() => setIsOpen(!isOpen)} className="xl:hidden text-white">
               {isOpen ? <X /> : <Menu />}
             </button>
           </div>
@@ -86,8 +97,16 @@ const Navbar: React.FC = () => {
       </div>
 
       {isOpen && (
-        <div className="md:hidden fixed inset-0 top-16 bg-slate-900 border-t border-slate-800 animate-fade-in z-[999] overflow-y-auto">
+        <div className="xl:hidden fixed inset-0 top-16 bg-slate-900 border-t border-slate-800 animate-fade-in z-[999] overflow-y-auto">
           <div className="flex flex-col p-4 gap-2">
+            <NavLink to="/profile" onClick={() => setIsOpen(false)} className="flex items-center gap-3 px-4 py-4 rounded-lg font-bold text-xs uppercase tracking-widest text-slate-400 hover:bg-slate-800 mb-2 border border-slate-800">
+               {dashboard?.profile?.avatar_url ? (
+                 <img src={dashboard.profile.avatar_url} alt="Avatar" className="w-6 h-6 rounded-full object-cover" />
+               ) : (
+                 <UserIcon size={18} />
+               )}
+               <span>My Profile</span>
+            </NavLink>
             {links.map(link => (
               <NavLink 
                 key={link.to} 

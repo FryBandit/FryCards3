@@ -11,6 +11,14 @@ export interface Profile {
   pity_counter: number;
   daily_streak: number;
   last_daily_claim: string | null;
+  // New fields from audit
+  avatar_url?: string;
+  banner_url?: string;
+  card_back_url?: string;
+  bio?: string;
+  is_public?: boolean;
+  total_trades?: number;
+  total_quicksells?: number;
 }
 
 export interface Card {
@@ -25,7 +33,8 @@ export interface Card {
   is_new?: boolean;
   quantity?: number;
   set_name?: string;
-  is_foil?: boolean;
+  is_foil?: boolean; // From backend view
+  foil_quantity?: number; // New field
   first_acquired?: string;
   hp?: number;
   attack?: number;
@@ -58,6 +67,8 @@ export interface PackType {
   card_count: number;
   guaranteed_rarity: string | null;
   image_url: string;
+  foil_chance?: number; // New
+  has_foil_slot?: boolean; // New
 }
 
 export interface Mission {
@@ -73,7 +84,6 @@ export interface Mission {
   completion_percentage: number;
 }
 
-// Added Quest interface for QuestsAndAchievements view
 export interface Quest {
   id: string;
   title: string;
@@ -87,7 +97,6 @@ export interface Quest {
   reward_xp: number;
 }
 
-// Added Achievement interface for QuestsAndAchievements view
 export interface Achievement {
   id: string;
   title: string;
@@ -156,10 +165,82 @@ export interface LeaderboardEntry {
   rank: number;
   user_id: string;
   username: string;
+  avatar_url?: string; // New
+  banner_url?: string; // New
   unique_cards?: number;
   total_cards?: number;
   completion_percentage?: number;
   level?: number;
   xp?: number;
   packs_opened?: number;
+}
+
+// --- New Social & Trading Interfaces ---
+
+export interface Friend {
+  id: string; // The friendship ID or user ID depending on context
+  friend_id: string;
+  username: string;
+  avatar_url?: string;
+  status: 'accepted' | 'pending';
+  is_online?: boolean; // Optional, if we had presence
+}
+
+export interface PendingRequest {
+  id: string;
+  from_user_id: string;
+  from_username: string;
+  from_avatar_url?: string;
+  created_at: string;
+}
+
+export interface TradeOffer {
+  id: string;
+  sender_id: string;
+  sender_username: string;
+  receiver_id: string;
+  receiver_username: string;
+  sender_cards: Card[]; // Simplified for UI, usually contains card IDs
+  sender_gold: number;
+  receiver_cards: Card[];
+  receiver_gold: number;
+  status: 'pending' | 'accepted' | 'declined' | 'cancelled' | 'expired';
+  created_at: string;
+  expires_at: string;
+}
+
+export interface ShopItem {
+  id: string;
+  name: string;
+  description: string;
+  type: 'banner' | 'avatar' | 'card_back';
+  image_url: string;
+  cost_gold: number | null;
+  cost_gems: number | null;
+  is_owned: boolean;
+  is_equipped: boolean;
+  rarity: 'Common' | 'Rare' | 'Legendary';
+}
+
+export interface PublicProfile {
+  id: string;
+  username: string;
+  avatar_url?: string;
+  banner_url?: string;
+  bio?: string;
+  level: number;
+  created_at: string;
+  total_trades: number;
+  stats: {
+    total_cards: number;
+    unique_cards: number;
+  };
+  social: {
+    followers: number;
+    following: number;
+    is_following: boolean;
+    is_friend: boolean;
+    friendship_status?: string;
+  };
+  featured_cards?: Card[];
 }

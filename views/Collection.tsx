@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 import { useGame } from '../context/GameContext';
 import { Card } from '../types';
 import CardDisplay from '../components/CardDisplay';
-import { Filter, Trash2, ChevronLeft, ChevronRight, Search, SortAsc, Info, AlertCircle, RefreshCw } from 'lucide-react';
+import { Filter, Trash2, ChevronLeft, ChevronRight, Search, SortAsc, Info, AlertCircle, RefreshCw, Sparkles, Coins } from 'lucide-react';
 import { RARITY_COLORS } from '../constants';
 
 const Collection: React.FC = () => {
@@ -16,13 +16,13 @@ const Collection: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [millingAll, setMillingAll] = useState(false);
-  const [millingCardId, setMillingCardId] = useState<string | null>(null);
-
-  const LIMIT = 20;
-  const mountedRef = useRef(true);
   
   // Modals State
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+  const [processingAction, setProcessingAction] = useState(false);
+
+  const LIMIT = 20;
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -47,7 +47,18 @@ const Collection: React.FC = () => {
           throw error;
       }
       
-      if (mountedRef.current) setCards(data || []);
+      if (mountedRef.current) {
+        setCards(data || []);
+        
+        // Mark "New" cards as seen
+        const newCardIds = (data as Card[])?.filter(c => c.is_new).map(c => c.id);
+        if (newCardIds && newCardIds.length > 0) {
+          await supabase.rpc('mark_cards_seen', { 
+            p_user_id: user.id, 
+            p_card_ids: newCardIds 
+          });
+        }
+      }
     } catch(e: any) {
       console.error("Collection Load Error:", e);
       if (mountedRef.current) {
@@ -62,27 +73,39 @@ const Collection: React.FC = () => {
     loadCards();
   }, [loadCards]);
 
-  const handleMill = async (card: Card, quantity: number) => {
+  const handleQuicksell = async (card: Card, isFoil: boolean) => {
     if (!user) return;
-    setMillingCardId(card.id);
+    
+    const qty = isFoil ? card.foil_quantity : card.quantity;
+    if (!qty || qty <= 0) return;
 
+    if (!confirm(`Sell 1 ${isFoil ? 'FOIL' : ''} copy of ${card.name} for Gold?`)) return;
+
+    setProcessingAction(true);
     try {
-      const { error } = await supabase.rpc('mill_duplicates', {
-        p_user_id: user.id,
-        p_card_id: card.id,
-        p_quantity: quantity
-      });
+        const { data, error } = await supabase.rpc('quicksell_card', {
+            p_user_id: user.id,
+            p_card_id: card.id,
+            p_is_foil: isFoil
+        });
 
-      if (error) throw error;
+        if (error) throw error;
+        
+        showToast(`Sold for ${data} Gold`, 'success');
+        
+        // Update local state temporarily
+        if (selectedCard && selectedCard.id === card.id) {
+             const updated = { ...selectedCard };
+             if (isFoil) updated.foil_quantity = (updated.foil_quantity || 1) - 1;
+             else updated.quantity = (updated.quantity || 1) - 1;
+             setSelectedCard(updated);
+        }
+        await Promise.all([loadCards(), refreshDashboard()]);
 
-      if (mountedRef.current) setSelectedCard(null);
-      showToast(`Successfully milled ${quantity} copies`, 'success');
-      await Promise.all([loadCards(), refreshDashboard()]);
-      
-    } catch (error: any) {
-      showToast(error.message, 'error');
+    } catch (e: any) {
+        showToast(e.message, 'error');
     } finally {
-      setMillingCardId(null);
+        setProcessingAction(false);
     }
   };
 
@@ -100,8 +123,6 @@ const Collection: React.FC = () => {
     setMillingAll(true);
 
     try {
-      // Use a batch RPC if available, or optimize the loop
-      // Assuming 'mill_bulk_duplicates' is a more efficient server-side function
       const items = duplicates.map(c => ({
         card_id: c.id,
         quantity: (c.quantity || 1) - 1
@@ -113,8 +134,7 @@ const Collection: React.FC = () => {
       });
 
       if (error) {
-        // Fallback to sequential if bulk RPC doesn't exist yet (though discouraged in review)
-        console.warn("Bulk mill RPC not found, falling back to sequential...");
+        // Fallback
         for (const card of duplicates) {
           await supabase.rpc('mill_duplicates', {
             p_user_id: user.id,
@@ -152,10 +172,14 @@ const Collection: React.FC = () => {
                 
                 <div className="grid grid-cols-2 gap-4 mb-6">
                   <div className="bg-slate-950/50 rounded-sm p-3 border border-slate-800">
-                    <div className="text-[10px] font-black text-slate-600 uppercase mb-1">Quantity</div>
-                    <div className="text-xl font-heading font-bold text-white">{selectedCard.quantity || 1}</div>
+                    <div className="text-[10px] font-black text-slate-600 uppercase mb-1">Standard Qty</div>
+                    <div className="text-xl font-heading font-bold text-white">{selectedCard.quantity || 0}</div>
                   </div>
-                  <div className="bg-slate-950/50 rounded-sm p-3 border border-slate-800">
+                  <div className="bg-slate-950/50 rounded-sm p-3 border border-amber-900/30">
+                    <div className="text-[10px] font-black text-amber-600 uppercase mb-1 flex items-center gap-1"><Sparkles size={10} /> Foil Qty</div>
+                    <div className="text-xl font-heading font-bold text-amber-400">{selectedCard.foil_quantity || 0}</div>
+                  </div>
+                  <div className="bg-slate-950/50 rounded-sm p-3 border border-slate-800 col-span-2">
                     <div className="text-[10px] font-black text-slate-600 uppercase mb-1">Rarity</div>
                     <div className={`text-xl font-heading font-bold ${RARITY_COLORS[selectedCard.rarity]}`}>{selectedCard.rarity}</div>
                   </div>
@@ -163,20 +187,22 @@ const Collection: React.FC = () => {
               </div>
 
               <div className="space-y-3">
-                {(selectedCard.quantity || 0) > 1 ? (
-                  <button 
-                    onClick={() => handleMill(selectedCard, (selectedCard.quantity || 0) - 1)}
-                    disabled={millingCardId === selectedCard.id}
-                    className="w-full bg-slate-800 hover:bg-red-600 hover:text-white py-4 rounded-sm text-slate-400 flex items-center justify-center gap-3 font-heading font-black text-[10px] transition-all border-2 border-slate-700 hover:border-red-800 hover:translate-y-1 hover:shadow-none shadow-[4px_4px_0_rgba(0,0,0,0.5)] disabled:opacity-50"
-                  >
-                    {millingCardId === selectedCard.id ? <RefreshCw className="animate-spin" size={16} /> : <Trash2 size={16} />}
-                    RECLAIM DUPLICATES
-                  </button>
-                ) : (
-                  <div className="w-full bg-slate-950/50 text-slate-600 py-4 rounded-sm text-center font-bold text-[10px] uppercase tracking-widest border border-slate-800 font-mono">
-                    NO DUPLICATES DETECTED
-                  </div>
-                )}
+                <div className="grid grid-cols-2 gap-3">
+                    <button 
+                        onClick={() => handleQuicksell(selectedCard, false)}
+                        disabled={processingAction || (selectedCard.quantity || 0) <= 0}
+                        className="bg-slate-800 hover:bg-green-600 hover:text-white py-3 rounded-sm text-slate-400 flex flex-col items-center justify-center gap-1 font-heading font-black text-[10px] transition-all border border-slate-700 disabled:opacity-50"
+                    >
+                        <span className="flex items-center gap-1"><Coins size={12} /> SELL STD</span>
+                    </button>
+                    <button 
+                        onClick={() => handleQuicksell(selectedCard, true)}
+                        disabled={processingAction || (selectedCard.foil_quantity || 0) <= 0}
+                        className="bg-slate-800 hover:bg-amber-600 hover:text-white py-3 rounded-sm text-amber-500/80 flex flex-col items-center justify-center gap-1 font-heading font-black text-[10px] transition-all border border-slate-700 disabled:opacity-50"
+                    >
+                        <span className="flex items-center gap-1"><Sparkles size={12} /> SELL FOIL</span>
+                    </button>
+                </div>
                 
                 <button 
                   onClick={() => setSelectedCard(null)}
@@ -206,7 +232,7 @@ const Collection: React.FC = () => {
            className="bg-red-900/20 text-red-400 border-2 border-red-500/30 hover:bg-red-500 hover:text-white px-6 py-3 rounded-sm font-bold flex items-center gap-2 transition-all active:translate-y-1 active:shadow-none shadow-[4px_4px_0_rgba(127,29,29,0.4)] disabled:opacity-50 font-heading text-xs"
          >
            {millingAll ? <RefreshCw className="animate-spin" size={16} /> : <Trash2 size={16} />}
-           MILL ALL DUPLICATES
+           MILL DUPLICATES
          </button>
       </div>
 

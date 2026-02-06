@@ -2,8 +2,9 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { supabase } from '../supabaseClient';
-import { Trophy, Gift, Zap, Target, Activity, RefreshCw } from 'lucide-react';
+import { Trophy, Gift, Zap, Target, Activity, RefreshCw, Sparkles, Flame, User } from 'lucide-react';
 import DailyRewardModal from '../components/DailyRewardModal';
+import { motion } from 'framer-motion';
 
 const Dashboard: React.FC = () => {
   const { dashboard, refreshDashboard, user, error } = useGame();
@@ -33,8 +34,6 @@ const Dashboard: React.FC = () => {
   );
 
   const { profile, stats, missions = [] } = dashboard;
-  
-  // Safe defaults for stats
   const safeStats = stats || {
     total_cards: 0,
     unique_cards: 0,
@@ -44,17 +43,34 @@ const Dashboard: React.FC = () => {
     set_completion: []
   };
 
-  const xpNeeded = profile.level * 100;
   const progress = (profile.xp % 100);
+  const pityPercentage = (profile.pity_counter / 10) * 100;
+  const isPityHigh = profile.pity_counter >= 8;
 
   return (
     <div className="space-y-8 animate-fade-in pb-20">
       <DailyRewardModal isOpen={showRewardModal} onClose={() => setShowRewardModal(false)} streak={profile.daily_streak} />
 
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-800 pb-8">
-        <div>
-          <h1 className="text-3xl md:text-4xl font-heading font-black text-white tracking-tighter uppercase drop-shadow-[4px_4px_0_rgba(236,72,153,1)]">OPERATOR: <span className="text-indigo-400">{profile.username}</span></h1>
-          <p className="text-slate-500 mt-2 font-mono text-xs tracking-widest">STATUS: ONLINE // ENCRYPTION: ACTIVE</p>
+        <div className="flex items-center gap-6">
+          <div className="relative">
+             <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-slate-700 bg-slate-900">
+               {profile.avatar_url ? (
+                 <img src={profile.avatar_url} alt={profile.username} className="w-full h-full object-cover" />
+               ) : (
+                 <div className="w-full h-full flex items-center justify-center bg-indigo-900/50">
+                   <User size={40} className="text-indigo-400" />
+                 </div>
+               )}
+             </div>
+             <div className="absolute -bottom-2 -right-2 bg-slate-950 border border-slate-700 text-xs font-bold px-2 py-0.5 rounded-full text-indigo-400 shadow-md">
+               LVL {profile.level}
+             </div>
+          </div>
+          <div>
+            <h1 className="text-3xl md:text-4xl font-heading font-black text-white tracking-tighter uppercase drop-shadow-[4px_4px_0_rgba(236,72,153,1)]">OPERATOR: <span className="text-indigo-400">{profile.username}</span></h1>
+            <p className="text-slate-500 mt-2 font-mono text-xs tracking-widest">STATUS: ONLINE // ENCRYPTION: ACTIVE</p>
+          </div>
         </div>
         <div className="text-right">
            <div className="text-[10px] font-bold text-slate-500 uppercase font-mono mb-1">Collection Progress</div>
@@ -81,22 +97,62 @@ const Dashboard: React.FC = () => {
                 <span className="text-indigo-400">{profile.xp} XP</span>
               </div>
               <div className="w-full bg-slate-900 h-4 rounded-sm overflow-hidden border border-slate-800 p-0.5">
-                <div className="bg-gradient-to-r from-indigo-500 to-cyan-400 h-full rounded-sm transition-all duration-1000" style={{ width: `${progress}%` }}></div>
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progress}%` }}
+                  className="bg-gradient-to-r from-indigo-500 to-cyan-400 h-full rounded-sm"
+                  transition={{ duration: 1, ease: "easeOut" }}
+                ></motion.div>
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 mt-10">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-10">
                <div className="bg-slate-950/40 p-4 rounded-sm border border-slate-800/50">
-                  <div className="text-[10px] text-slate-500 uppercase mb-1 font-mono">Cards</div>
+                  <div className="text-[10px] text-slate-500 uppercase mb-1 font-mono">Unique Assets</div>
                   <div className="text-xl font-heading font-bold text-white">{safeStats.unique_cards}</div>
                </div>
                <div className="bg-slate-950/40 p-4 rounded-sm border border-slate-800/50">
-                  <div className="text-[10px] text-slate-500 uppercase mb-1 font-mono">Packs</div>
+                  <div className="text-[10px] text-slate-500 uppercase mb-1 font-mono">Packs Opened</div>
                   <div className="text-xl font-heading font-bold text-white">{profile.packs_opened}</div>
                </div>
-               <div className="bg-slate-950/40 p-4 rounded-sm border border-slate-800/50">
-                  <div className="text-[10px] text-slate-500 uppercase mb-1 font-mono">Pity</div>
-                  <div className="text-xl font-heading font-bold text-indigo-400">{profile.pity_counter}/10</div>
+               
+               {/* Pity Visualizer (Heat Meter) */}
+               <div className={`p-4 rounded-sm border transition-all duration-500 relative overflow-hidden ${isPityHigh ? 'bg-indigo-900/20 border-indigo-500/50' : 'bg-slate-950/40 border-slate-800/50'}`}>
+                  {isPityHigh && (
+                    <motion.div 
+                      animate={{ opacity: [0.1, 0.3, 0.1] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                      className="absolute inset-0 bg-indigo-500"
+                    ></motion.div>
+                  )}
+                  <div className="relative z-10">
+                    <div className="flex justify-between items-start mb-2">
+                       <div className="text-[10px] text-slate-500 uppercase font-mono">Rarity Pity</div>
+                       <div className={`text-xs font-bold font-mono ${isPityHigh ? 'text-indigo-400 animate-pulse' : 'text-slate-400'}`}>
+                         {profile.pity_counter}/10
+                       </div>
+                    </div>
+                    <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                       <motion.div 
+                         initial={{ width: 0 }}
+                         animate={{ 
+                           width: `${pityPercentage}%`,
+                           backgroundColor: profile.pity_counter >= 9 ? '#ec4899' : profile.pity_counter >= 5 ? '#8b5cf6' : '#6366f1'
+                         }}
+                         className="h-full rounded-full shadow-[0_0_10px_rgba(139,92,246,0.5)]"
+                       ></motion.div>
+                    </div>
+                    <div className="mt-2 flex items-center gap-1">
+                       {profile.pity_counter >= 9 ? (
+                         <Sparkles size={10} className="text-indigo-400 animate-spin" />
+                       ) : (
+                         <Flame size={10} className={isPityHigh ? 'text-indigo-500' : 'text-slate-600'} />
+                       )}
+                       <span className={`text-[8px] font-black uppercase tracking-tighter ${isPityHigh ? 'text-indigo-300' : 'text-slate-600'}`}>
+                         {profile.pity_counter >= 10 ? 'GUARANTEED RARE' : isPityHigh ? 'HIGH SIGNAL' : 'SIGNAL STRENGTH'}
+                       </span>
+                    </div>
+                  </div>
                </div>
             </div>
           </div>

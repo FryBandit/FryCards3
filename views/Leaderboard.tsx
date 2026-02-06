@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { LeaderboardEntry } from '../types';
-import { Crown, Layers, Zap, Package } from 'lucide-react';
+import { Crown, Layers, Zap, Package, User } from 'lucide-react';
 
 const Leaderboard: React.FC = () => {
   const [type, setType] = useState<'collection' | 'level' | 'packs_opened'>('collection');
@@ -119,7 +119,10 @@ const Leaderboard: React.FC = () => {
 
                   {/* Operative */}
                   <div className="col-span-7 font-bold text-white text-lg w-full text-center md:text-left">
-                    <div className="flex items-center justify-center md:justify-start gap-2">
+                    <div className="flex items-center justify-center md:justify-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-600 overflow-hidden flex-shrink-0">
+                         {entry.avatar_url ? <img src={entry.avatar_url} className="w-full h-full object-cover" alt="" /> : <User size={16} className="m-auto text-slate-500 mt-2"/>}
+                      </div>
                       {entry.username}
                       {entry.rank <= 3 && <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>}
                     </div>
