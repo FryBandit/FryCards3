@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Card } from '../types';
-import { Star, Shield, Zap, CircleDot, Box } from 'lucide-react';
+import { Star, Shield, Zap, CircleDot, Box, ImageOff } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface CardDisplayProps {
@@ -28,15 +28,6 @@ const CardDisplay: React.FC<CardDisplayProps> = ({
     'Mythic': 'text-orange-400 border-orange-500 shadow-orange-500/50',
     'Divine': 'text-yellow-300 border-yellow-400 shadow-yellow-500/60'
   }[card.rarity] || 'text-slate-400 border-slate-600';
-
-  const bgGradient = {
-    'Common': 'from-slate-900 via-slate-800 to-slate-900',
-    'Uncommon': 'from-emerald-950 via-emerald-900 to-slate-900',
-    'Rare': 'from-blue-950 via-blue-900 to-slate-900',
-    'Super-Rare': 'from-purple-950 via-purple-900 to-slate-900',
-    'Mythic': 'from-orange-950 via-red-900 to-slate-900',
-    'Divine': 'from-yellow-950 via-amber-900 to-slate-900'
-  }[card.rarity];
   
   // 3:4 Aspect Ratio Dimensions
   const sizeClasses = {
@@ -87,8 +78,13 @@ const CardDisplay: React.FC<CardDisplayProps> = ({
           <div className="absolute inset-0 bg-black">
              {card.is_video ? (
                 <video src={card.image_url} autoPlay loop muted playsInline className="w-full h-full object-cover opacity-90 glitch-hover" />
+             ) : card.image_url ? (
+                <img src={card.image_url} alt={card.name} className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-110 glitch-hover" />
              ) : (
-                <img src={card.image_url || 'https://picsum.photos/300/400'} alt={card.name} className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-110 glitch-hover" />
+                <div className="w-full h-full flex flex-col items-center justify-center bg-slate-800 text-slate-600">
+                    <ImageOff size={32} />
+                    <span className="text-[10px] font-mono mt-2">NO DATA</span>
+                </div>
              )}
              {/* Gradient Overlay for Text Readability */}
              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent opacity-90"></div>

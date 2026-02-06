@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 import { useGame } from '../context/GameContext';
 import { MarketListing, Card } from '../types';
 import CardDisplay from '../components/CardDisplay';
-import { Search, Filter, DollarSign, Gavel, Plus, X, Tag, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import { Search, Filter, Gavel, Plus, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { RARITY_COLORS } from '../constants';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -51,10 +51,13 @@ const Marketplace: React.FC = () => {
       });
       
       if (error) throw error;
-      if (mountedRef.current) setListings(data || []);
+      
+      if (mountedRef.current) {
+        setListings(data || []);
+      }
     } catch (err: any) {
-      console.error('Error fetching listings:', err);
-      showToast('Failed to load market data', 'error');
+      console.error('Market API error:', err);
+      showToast('Failed to retrieve market data.', 'error');
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -66,14 +69,21 @@ const Marketplace: React.FC = () => {
 
   const loadUserCards = async () => {
     if (!user) return;
-    const { data } = await supabase.rpc('get_user_collection', {
-       p_user_id: user.id,
-       p_rarity: null,
-       p_sort_by: 'name',
-       p_limit: 100,
-       p_offset: 0
-    });
-    if (data && mountedRef.current) setUserCards(data);
+    try {
+        const { data, error } = await supabase.rpc('get_user_collection', {
+           p_user_id: user.id,
+           p_rarity: null,
+           p_sort_by: 'name',
+           p_limit: 100,
+           p_offset: 0
+        });
+        
+        if (error) throw error;
+        if (data && mountedRef.current) setUserCards(data);
+    } catch (e: any) {
+        console.error('Error loading user cards:', e);
+        showToast('Failed to load your collection.', 'error');
+    }
   };
 
   useEffect(() => {
@@ -117,7 +127,6 @@ const Marketplace: React.FC = () => {
       return;
     }
     
-    // We can use a custom Confirm Modal here too, but native confirm is acceptable for critical actions if stylized not available
     if (!window.confirm(`Purchase for ${listing.price} ${listing.currency}?`)) return;
 
     try {
@@ -177,7 +186,9 @@ const Marketplace: React.FC = () => {
           <h1 className="text-4xl md:text-5xl font-heading font-black text-white tracking-tighter drop-shadow-[4px_4px_0_rgba(236,72,153,1)]">
             GLOBAL <span className="text-indigo-500">MARKET</span>
           </h1>
-          <p className="text-slate-500 font-medium mt-2 font-mono">Trade cards securely on the decentralized exchange.</p>
+          <div className="flex items-center gap-2 mt-2">
+            <p className="text-slate-500 font-medium font-mono">Trade cards securely on the decentralized exchange.</p>
+          </div>
         </div>
         <button 
           onClick={() => setShowCreateModal(true)}
@@ -368,17 +379,23 @@ const Marketplace: React.FC = () => {
                  <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar">
                     <div>
                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block font-mono">Select Card</label>
-                       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-40 overflow-y-auto p-2 bg-slate-950 rounded-lg border border-slate-800">
-                          {userCards.map(card => (
-                            <div 
-                              key={card.id} 
-                              onClick={() => setSelectedCardId(card.id)}
-                              className={`cursor-pointer p-1 rounded border-2 transition-all ${selectedCardId === card.id ? 'border-indigo-500 bg-indigo-500/10' : 'border-transparent hover:border-slate-700'}`}
-                            >
-                              <img src={card.image_url} className="w-full rounded-sm" alt={card.name} />
-                            </div>
-                          ))}
-                       </div>
+                       {userCards.length > 0 ? (
+                           <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-40 overflow-y-auto p-2 bg-slate-950 rounded-lg border border-slate-800">
+                              {userCards.map(card => (
+                                <div 
+                                  key={card.id} 
+                                  onClick={() => setSelectedCardId(card.id)}
+                                  className={`cursor-pointer p-1 rounded border-2 transition-all ${selectedCardId === card.id ? 'border-indigo-500 bg-indigo-500/10' : 'border-transparent hover:border-slate-700'}`}
+                                >
+                                  <img src={card.image_url} className="w-full rounded-sm" alt={card.name} />
+                                </div>
+                              ))}
+                           </div>
+                       ) : (
+                           <div className="p-4 bg-slate-950 rounded border border-slate-800 text-center text-slate-500 font-mono text-sm">
+                               No sellable assets found.
+                           </div>
+                       )}
                     </div>
 
                     <div className="flex gap-4">
@@ -435,7 +452,7 @@ const Marketplace: React.FC = () => {
                  </div>
               </div>
 
-              {selectedCardId && (
+              {selectedCardId && userCards.find(c => c.id === selectedCardId) && (
                 <div className="w-48 hidden md:block shrink-0">
                    <div className="sticky top-0">
                      <CardDisplay card={userCards.find(c => c.id === selectedCardId)!} size="md" />

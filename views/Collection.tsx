@@ -50,7 +50,7 @@ const Collection: React.FC = () => {
     } catch(e: any) {
       console.error("Collection Load Error:", e);
       if (mountedRef.current) {
-        setError("Failed to synchronize collection database.");
+        setError(e.message || "Failed to load collection.");
       }
     } finally {
       if (mountedRef.current) setLoading(false);
@@ -63,7 +63,7 @@ const Collection: React.FC = () => {
 
   const handleMill = async (quantity: number) => {
     if (!user || !selectedCard) return;
-    
+
     try {
       const { data, error } = await supabase.rpc('mill_duplicates', {
         p_user_id: user.id,
@@ -82,8 +82,6 @@ const Collection: React.FC = () => {
     }
   };
 
-  // Iterates through current page and mills all duplicates
-  // Note: ideally this should be a single backend RPC 'mill_all_duplicates'
   const handleMillAllDuplicates = async () => {
     if (!user || cards.length === 0) return;
     
@@ -181,7 +179,9 @@ const Collection: React.FC = () => {
             <h1 className="text-4xl md:text-5xl font-heading font-black text-white tracking-tighter drop-shadow-[4px_4px_0_rgba(6,182,212,0.8)]">
               CARD <span className="text-indigo-500">DATABASE</span>
             </h1>
-            <p className="text-slate-500 text-xs font-mono mt-2 uppercase tracking-widest">Global inventory index // Auth: LEVEL_{user?.id.slice(0,4)}</p>
+            <div className="flex items-center gap-2 mt-2">
+                <p className="text-slate-500 text-xs font-mono uppercase tracking-widest">Global inventory index // Auth: LEVEL_{user?.id.slice(0,4)}</p>
+            </div>
          </div>
          <button 
            onClick={handleMillAllDuplicates}
