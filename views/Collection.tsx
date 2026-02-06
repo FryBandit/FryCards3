@@ -1,83 +1,22 @@
+
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { useGame } from '../context/GameContext';
 import { Card } from '../types';
 import CardDisplay from '../components/CardDisplay';
-import { Filter, Trash2, ChevronLeft, ChevronRight, Search, SortAsc, Info, AlertCircle } from 'lucide-react';
+import { Filter, Trash2, ChevronLeft, ChevronRight, Search, SortAsc, Info, AlertCircle, RefreshCw } from 'lucide-react';
 import { RARITY_COLORS } from '../constants';
 
-// Mock data for fallback when backend fails
-const MOCK_COLLECTION: Card[] = [
-  {
-    id: 'c1',
-    name: 'Cyber Sentinel',
-    rarity: 'Common',
-    card_type: 'Unit',
-    image_url: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=600&auto=format&fit=crop',
-    is_video: false,
-    description: 'Basic defense unit for perimeter control.',
-    quantity: 3,
-    is_new: false,
-    set_name: 'Core Set'
-  },
-  {
-    id: 'c2',
-    name: 'Plasma Arc',
-    rarity: 'Rare',
-    card_type: 'Spell',
-    image_url: 'https://images.unsplash.com/photo-1516339901601-2e1b62dc0c45?q=80&w=600&auto=format&fit=crop',
-    is_video: false,
-    description: 'Deals 5 damage to any target.',
-    quantity: 1,
-    is_new: true,
-    set_name: 'Neon Nights'
-  },
-  {
-    id: 'c3',
-    name: 'Glitch Walker',
-    rarity: 'Super-Rare',
-    card_type: 'Unit',
-    image_url: 'https://images.unsplash.com/photo-1620712943543-bcc4688e7485?q=80&w=600&auto=format&fit=crop',
-    is_video: false,
-    description: 'Phases through reality to bypass shields.',
-    quantity: 2,
-    is_new: false,
-    set_name: 'System Crash'
-  },
-  {
-    id: 'c4',
-    name: 'The Architect',
-    rarity: 'Divine',
-    card_type: 'Legendary',
-    image_url: 'https://images.unsplash.com/photo-1531297461136-82lw82639811?q=80&w=600&auto=format&fit=crop',
-    is_video: false,
-    description: 'He who wrote the first line of code.',
-    quantity: 1,
-    is_new: false,
-    set_name: 'Origins'
-  },
-  {
-    id: 'c5',
-    name: 'Firewall Dragon',
-    rarity: 'Mythic',
-    card_type: 'Unit',
-    image_url: 'https://images.unsplash.com/photo-1642425149556-b6f90e946859?q=80&w=600&auto=format&fit=crop',
-    is_video: false,
-    description: 'Living encryption that burns intruders.',
-    quantity: 1,
-    is_new: true,
-    set_name: 'Security Breach'
-  }
-];
-
 const Collection: React.FC = () => {
-  const { user, refreshDashboard } = useGame();
+  const { user, refreshDashboard, showToast } = useGame();
   const [cards, setCards] = useState<Card[]>([]);
   const [page, setPage] = useState(0);
   const [filterRarity, setFilterRarity] = useState<string>('');
-  const [sortBy, setSortBy] = useState<string>('rarity'); // rarity, name, quantity, newest
+  const [sortBy, setSortBy] = useState<string>('rarity');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [millingAll, setMillingAll] = useState(false);
+
   const LIMIT = 20;
   const mountedRef = useRef(true);
   
@@ -110,10 +49,9 @@ const Collection: React.FC = () => {
       if (mountedRef.current) setCards(data || []);
     } catch(e: any) {
       console.error("Collection Load Error:", e);
-      // Fallback to mock data on error instead of showing error screen
-      // This handles the 'column "c.name" must appear in the GROUP BY clause' error
-      console.warn("Using mock collection data due to backend error.");
-      if (mountedRef.current) setCards(MOCK_COLLECTION);
+      if (mountedRef.current) {
+        setError("Failed to synchronize collection database.");
+      }
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -126,11 +64,6 @@ const Collection: React.FC = () => {
   const handleMill = async (quantity: number) => {
     if (!user || !selectedCard) return;
     
-    if ((selectedCard.quantity || 0) <= 1) {
-      alert("Cannot mill all copies. Must keep at least 1.");
-      return;
-    }
-
     try {
       const { data, error } = await supabase.rpc('mill_duplicates', {
         p_user_id: user.id,
@@ -141,15 +74,48 @@ const Collection: React.FC = () => {
       if (error) throw error;
 
       if (mountedRef.current) setSelectedCard(null);
+      showToast(`Successfully milled ${quantity} copies`, 'success');
       await Promise.all([loadCards(), refreshDashboard()]);
       
     } catch (error: any) {
-      alert(error.message);
-      // Simulate success in mock mode
-      if (error.message.includes('not found') || error.message.includes('function')) {
-          alert("Simulation: Cards milled. Resources added to account.");
-          if (mountedRef.current) setSelectedCard(null);
+      showToast(error.message, 'error');
+    }
+  };
+
+  // Iterates through current page and mills all duplicates
+  // Note: ideally this should be a single backend RPC 'mill_all_duplicates'
+  const handleMillAllDuplicates = async () => {
+    if (!user || cards.length === 0) return;
+    
+    const duplicates = cards.filter(c => (c.quantity || 0) > 1);
+    if (duplicates.length === 0) {
+      showToast("No duplicates detected in current sector.", 'info');
+      return;
+    }
+
+    if (!window.confirm(`Found ${duplicates.length} assets with duplicates. Proceed to mass recycle?`)) return;
+
+    setMillingAll(true);
+    let successCount = 0;
+
+    try {
+      for (const card of duplicates) {
+        const qtyToMill = (card.quantity || 1) - 1;
+        if (qtyToMill > 0) {
+           const { error } = await supabase.rpc('mill_duplicates', {
+             p_user_id: user.id,
+             p_card_id: card.id,
+             p_quantity: qtyToMill
+           });
+           if (!error) successCount++;
+        }
       }
+      showToast(`Batch operation complete. Recycled ${successCount} asset types.`, 'success');
+      await Promise.all([loadCards(), refreshDashboard()]);
+    } catch (e: any) {
+      showToast("Batch operation interrupted.", 'error');
+    } finally {
+      setMillingAll(false);
     }
   };
 
@@ -158,8 +124,8 @@ const Collection: React.FC = () => {
       {/* Detail & Mill Modal */}
       {selectedCard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in" onClick={() => setSelectedCard(null)}>
-          <div className="bg-slate-900 p-8 rounded-[2.5rem] border border-slate-700 max-w-lg w-full shadow-2xl relative overflow-hidden flex flex-col md:flex-row gap-8" onClick={e => e.stopPropagation()}>
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+          <div className="bg-slate-900 p-8 rounded-[2rem] border-2 border-slate-700 max-w-lg w-full shadow-[8px_8px_0_rgba(0,0,0,0.5)] relative overflow-hidden flex flex-col md:flex-row gap-8" onClick={e => e.stopPropagation()}>
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-500"></div>
             
             <div className="shrink-0 flex justify-center">
               <CardDisplay card={selectedCard} size="md" />
@@ -167,15 +133,15 @@ const Collection: React.FC = () => {
 
             <div className="flex-1 flex flex-col justify-between">
               <div>
-                <h3 className="text-2xl font-heading font-black mb-1 text-white uppercase tracking-tight">{selectedCard.name}</h3>
-                <p className="text-slate-500 mb-6 text-sm font-medium">Asset ID: {selectedCard.id.slice(0, 8)}...{selectedCard.id.slice(-4)}</p>
+                <h3 className="text-xl font-heading font-black mb-2 text-white uppercase tracking-tight leading-snug">{selectedCard.name}</h3>
+                <p className="text-slate-500 mb-6 text-xs font-mono">Card ID: {selectedCard.id.slice(0, 8)}...{selectedCard.id.slice(-4)}</p>
                 
                 <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="bg-slate-950/50 rounded-xl p-3 border border-slate-800">
+                  <div className="bg-slate-950/50 rounded-sm p-3 border border-slate-800">
                     <div className="text-[10px] font-black text-slate-600 uppercase mb-1">Quantity</div>
                     <div className="text-xl font-heading font-bold text-white">{selectedCard.quantity || 1}</div>
                   </div>
-                  <div className="bg-slate-950/50 rounded-xl p-3 border border-slate-800">
+                  <div className="bg-slate-950/50 rounded-sm p-3 border border-slate-800">
                     <div className="text-[10px] font-black text-slate-600 uppercase mb-1">Rarity</div>
                     <div className={`text-xl font-heading font-bold ${RARITY_COLORS[selectedCard.rarity]}`}>{selectedCard.rarity}</div>
                   </div>
@@ -186,20 +152,20 @@ const Collection: React.FC = () => {
                 {(selectedCard.quantity || 0) > 1 ? (
                   <button 
                     onClick={() => handleMill((selectedCard.quantity || 0) - 1)}
-                    className="w-full bg-slate-800 hover:bg-red-600/20 hover:text-red-400 py-4 rounded-xl text-slate-400 flex items-center justify-center gap-3 font-heading font-black text-xs transition-all border border-slate-700 hover:border-red-500/30"
+                    className="w-full bg-slate-800 hover:bg-red-600 hover:text-white py-4 rounded-sm text-slate-400 flex items-center justify-center gap-3 font-heading font-black text-[10px] transition-all border-2 border-slate-700 hover:border-red-800 hover:translate-y-1 hover:shadow-none shadow-[4px_4px_0_rgba(0,0,0,0.5)]"
                   >
-                    <Trash2 size={18} />
+                    <Trash2 size={16} />
                     RECLAIM DUPLICATES
                   </button>
                 ) : (
-                  <div className="w-full bg-slate-950/50 text-slate-600 py-4 rounded-xl text-center font-bold text-[10px] uppercase tracking-widest border border-slate-800">
+                  <div className="w-full bg-slate-950/50 text-slate-600 py-4 rounded-sm text-center font-bold text-[10px] uppercase tracking-widest border border-slate-800 font-mono">
                     NO DUPLICATES DETECTED
                   </div>
                 )}
                 
                 <button 
                   onClick={() => setSelectedCard(null)}
-                  className="w-full py-2 text-slate-500 hover:text-slate-300 font-bold transition-colors text-[10px] uppercase tracking-[0.2em]"
+                  className="w-full py-2 text-slate-500 hover:text-white font-bold transition-colors text-[10px] uppercase tracking-[0.2em] font-mono"
                 >
                   CLOSE TERMINAL
                 </button>
@@ -212,20 +178,28 @@ const Collection: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-4 border-b border-slate-800 pb-8 animate-fade-in">
          <div>
-            <h1 className="text-5xl font-heading font-black text-white tracking-tighter">
-              ASSET <span className="text-indigo-500">DATABASE</span>
+            <h1 className="text-4xl md:text-5xl font-heading font-black text-white tracking-tighter drop-shadow-[4px_4px_0_rgba(6,182,212,0.8)]">
+              CARD <span className="text-indigo-500">DATABASE</span>
             </h1>
-            <p className="text-slate-500 text-sm font-mono mt-1 uppercase tracking-widest">Global inventory index // Auth: LEVEL_{user?.id.slice(0,4)}</p>
+            <p className="text-slate-500 text-xs font-mono mt-2 uppercase tracking-widest">Global inventory index // Auth: LEVEL_{user?.id.slice(0,4)}</p>
          </div>
+         <button 
+           onClick={handleMillAllDuplicates}
+           disabled={millingAll || loading}
+           className="bg-red-900/20 text-red-400 border-2 border-red-500/30 hover:bg-red-500 hover:text-white px-6 py-3 rounded-sm font-bold flex items-center gap-2 transition-all active:translate-y-1 active:shadow-none shadow-[4px_4px_0_rgba(127,29,29,0.4)] disabled:opacity-50 font-heading text-xs"
+         >
+           {millingAll ? <RefreshCw className="animate-spin" size={16} /> : <Trash2 size={16} />}
+           MILL ALL DUPLICATES
+         </button>
       </div>
 
       {/* Controls */}
-      <div className="flex flex-col lg:flex-row justify-between items-center gap-4 bg-slate-900/50 p-6 rounded-[2rem] border border-slate-800 backdrop-blur-xl animate-fade-in">
+      <div className="flex flex-col lg:flex-row justify-between items-center gap-4 bg-slate-900/50 p-6 rounded-lg border border-slate-800 backdrop-blur-xl animate-fade-in">
         <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
-          <div className="flex items-center gap-3 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-3 bg-slate-950 border border-slate-800 rounded-sm px-4 py-3">
              <Filter size={18} className="text-indigo-400" />
              <select 
-               className="bg-transparent text-sm focus:outline-none text-slate-200 font-bold uppercase tracking-tight"
+               className="bg-transparent text-sm focus:outline-none text-slate-200 font-bold uppercase tracking-tight font-mono"
                value={filterRarity}
                onChange={(e) => { setFilterRarity(e.target.value); setPage(0); }}
              >
@@ -234,10 +208,10 @@ const Collection: React.FC = () => {
              </select>
           </div>
           
-          <div className="flex items-center gap-3 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-3 bg-slate-950 border border-slate-800 rounded-sm px-4 py-3">
              <SortAsc size={18} className="text-indigo-400" />
              <select 
-                className="bg-transparent text-sm focus:outline-none text-slate-200 font-bold uppercase tracking-tight"
+                className="bg-transparent text-sm focus:outline-none text-slate-200 font-bold uppercase tracking-tight font-mono"
                 value={sortBy}
                 onChange={(e) => { setSortBy(e.target.value); setPage(0); }}
              >
@@ -253,20 +227,20 @@ const Collection: React.FC = () => {
           <button 
             disabled={page === 0}
             onClick={() => setPage(p => p - 1)}
-            className="p-3 bg-slate-800 rounded-xl hover:bg-slate-700 disabled:opacity-30 transition-all active:scale-90"
+            className="p-3 bg-slate-800 rounded-sm hover:bg-slate-700 disabled:opacity-30 transition-all border border-slate-700 hover:border-indigo-400"
           >
-            <ChevronLeft size={24} />
+            <ChevronLeft size={20} />
           </button>
-          <div className="bg-slate-950 px-6 py-3 rounded-xl border border-slate-800 flex flex-col items-center min-w-[120px]">
+          <div className="bg-slate-950 px-6 py-3 rounded-sm border border-slate-800 flex flex-col items-center min-w-[120px]">
              <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest leading-none mb-1">Sector</span>
              <span className="font-heading text-lg font-black text-indigo-400 leading-none">{page + 1}</span>
           </div>
           <button 
             disabled={cards.length < LIMIT}
             onClick={() => setPage(p => p + 1)}
-            className="p-3 bg-slate-800 rounded-xl hover:bg-slate-700 disabled:opacity-30 transition-all active:scale-90"
+            className="p-3 bg-slate-800 rounded-sm hover:bg-slate-700 disabled:opacity-30 transition-all border border-slate-700 hover:border-indigo-400"
           >
-            <ChevronRight size={24} />
+            <ChevronRight size={20} />
           </button>
         </div>
       </div>
@@ -278,13 +252,13 @@ const Collection: React.FC = () => {
              <div className="w-16 h-16 border-4 border-indigo-500/20 rounded-full"></div>
              <div className="absolute inset-0 w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
           </div>
-          <p className="font-heading text-sm tracking-[0.3em] text-slate-500 animate-pulse">STREAMING DATA ASSETS...</p>
+          <p className="font-heading text-sm tracking-[0.3em] text-slate-500 animate-pulse">STREAMING CARD DATA...</p>
         </div>
       ) : error ? (
         <div className="h-[40vh] flex flex-col items-center justify-center gap-4 text-red-400">
            <AlertCircle size={48} />
-           <p className="font-bold">{error}</p>
-           <button onClick={() => loadCards()} className="px-6 py-2 bg-slate-800 rounded-lg hover:bg-slate-700 text-white">Retry</button>
+           <p className="font-bold font-mono">{error}</p>
+           <button onClick={() => loadCards()} className="px-6 py-2 bg-slate-800 rounded-sm hover:bg-slate-700 text-white font-mono">Retry Connection</button>
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-y-12 gap-x-8 justify-items-center pt-8">
@@ -299,7 +273,7 @@ const Collection: React.FC = () => {
                <div className="mt-4 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 flex gap-2">
                   <button 
                     onClick={() => setSelectedCard(card)}
-                    className="bg-slate-900/80 backdrop-blur-md text-slate-300 hover:text-white hover:bg-indigo-600 text-[10px] px-5 py-2.5 rounded-full shadow-2xl border border-slate-700 hover:border-indigo-500 flex items-center gap-2 transition-all font-black uppercase tracking-widest"
+                    className="bg-slate-900/80 backdrop-blur-md text-slate-300 hover:text-white hover:bg-indigo-600 text-[10px] px-5 py-2.5 rounded-full shadow-2xl border border-slate-700 hover:border-indigo-500 flex items-center gap-2 transition-all font-black uppercase tracking-widest font-mono"
                   >
                     <Info size={12} /> DETAILS
                   </button>
@@ -308,8 +282,8 @@ const Collection: React.FC = () => {
           )) : (
             <div className="col-span-full py-32 text-slate-500 flex flex-col items-center">
               <Search size={80} className="mb-8 opacity-10" />
-              <h3 className="font-heading text-2xl text-slate-700 mb-2 font-black">NO RESULTS DETECTED</h3>
-              <p className="text-sm font-medium text-slate-600">Adjust filters or expand search range.</p>
+              <h3 className="font-heading text-2xl text-slate-700 mb-2 font-black">NO ASSETS FOUND</h3>
+              <p className="text-sm font-medium text-slate-600 font-mono">Sync complete. Sector is empty.</p>
             </div>
           )}
         </div>

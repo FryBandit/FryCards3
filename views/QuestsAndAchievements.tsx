@@ -190,10 +190,10 @@ const QuestsAndAchievements: React.FC = () => {
                className={`relative p-6 rounded-2xl border transition-all ${
                  ach.is_unlocked 
                    ? 'bg-slate-900/80 border-indigo-500/50 shadow-[0_0_20px_rgba(79,70,229,0.1)]' 
-                   : 'bg-slate-950/50 border-slate-800 opacity-60 grayscale'
+                   : 'bg-slate-950/50 border-slate-800 opacity-80'
                }`}
              >
-               <div className="flex items-start gap-4">
+               <div className={`flex items-start gap-4 ${!ach.is_unlocked ? 'grayscale opacity-70' : ''}`}>
                   <div className={`p-4 rounded-xl ${ach.is_unlocked ? 'bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-lg' : 'bg-slate-900 text-slate-600 border border-slate-800'}`}>
                      {ach.is_unlocked ? <Trophy size={24} /> : <Lock size={24} />}
                   </div>

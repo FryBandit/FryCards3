@@ -1,6 +1,8 @@
+
 import React from 'react';
 import { Card } from '../types';
-import { Star } from 'lucide-react';
+import { Star, Shield, Zap, CircleDot, Box } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 interface CardDisplayProps {
   card: Card;
@@ -12,86 +14,150 @@ interface CardDisplayProps {
 
 const CardDisplay: React.FC<CardDisplayProps> = ({ 
   card, 
-  isFlipped = false, 
+  isFlipped = true, 
   onClick, 
   size = 'md',
   showQuantity = false 
 }) => {
-  const rarityLower = card.rarity.toLowerCase().replace(' ', '-');
-  const rarityClass = `rarity-${rarityLower}`;
   const isHighRarity = ['Mythic', 'Divine', 'Super-Rare'].includes(card.rarity);
+  const rarityColor = {
+    'Common': 'text-slate-400 border-slate-600 shadow-slate-500/20',
+    'Uncommon': 'text-emerald-400 border-emerald-500 shadow-emerald-500/30',
+    'Rare': 'text-blue-400 border-blue-500 shadow-blue-500/40',
+    'Super-Rare': 'text-purple-400 border-purple-500 shadow-purple-500/50',
+    'Mythic': 'text-orange-400 border-orange-500 shadow-orange-500/50',
+    'Divine': 'text-yellow-300 border-yellow-400 shadow-yellow-500/60'
+  }[card.rarity] || 'text-slate-400 border-slate-600';
+
+  const bgGradient = {
+    'Common': 'from-slate-900 via-slate-800 to-slate-900',
+    'Uncommon': 'from-emerald-950 via-emerald-900 to-slate-900',
+    'Rare': 'from-blue-950 via-blue-900 to-slate-900',
+    'Super-Rare': 'from-purple-950 via-purple-900 to-slate-900',
+    'Mythic': 'from-orange-950 via-red-900 to-slate-900',
+    'Divine': 'from-yellow-950 via-amber-900 to-slate-900'
+  }[card.rarity];
   
+  // 3:4 Aspect Ratio Dimensions
   const sizeClasses = {
-    sm: 'w-32 h-48',
-    md: 'w-48 h-72',
-    lg: 'w-64 h-96',
+    sm: 'w-[135px] h-[180px]', 
+    md: 'w-[240px] h-[320px]', 
+    lg: 'w-[300px] h-[400px]',
   };
 
-  const getRarityStars = (rarity: string) => {
-    switch (rarity) {
-      case 'Common': return 1;
-      case 'Uncommon': return 2;
-      case 'Rare': return 3;
-      case 'Super-Rare': return 4;
-      case 'Mythic': return 5;
-      case 'Divine': return 6;
-      default: return 1;
+  const getRarityIcon = () => {
+    switch(card.rarity) {
+      case 'Common': return <CircleDot size={12} />;
+      case 'Uncommon': return <Box size={12} />;
+      case 'Rare': return <Shield size={12} />;
+      case 'Super-Rare': return <Zap size={12} />;
+      case 'Mythic': return <Star size={12} />;
+      case 'Divine': return <Star size={12} className="fill-current" />;
+      default: return <CircleDot size={12} />;
     }
   };
 
   return (
     <div 
-      className={`relative perspective-1000 ${sizeClasses[size]} cursor-pointer group select-none`}
+      className={`relative ${sizeClasses[size]} cursor-pointer group select-none`}
       onClick={onClick}
+      style={{ perspective: '1200px' }}
     >
-      <div className={`w-full h-full relative transform-style-3d transition-transform duration-700 ease-out ${isFlipped ? 'rotate-y-180' : ''}`}>
-        {/* Back */}
-        <div className="absolute w-full h-full backface-hidden rounded-xl border-4 border-slate-700 bg-slate-900 flex items-center justify-center overflow-hidden shadow-2xl">
-           <div className="absolute inset-0 bg-gradient-to-br from-indigo-950 via-slate-900 to-indigo-900 opacity-90"></div>
-           <div className="relative z-10 text-center transform group-hover:scale-110 transition-transform">
-             <div className="font-heading text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400 tracking-tighter">FRY</div>
-             <div className="font-heading text-xs font-bold text-slate-500 tracking-[0.3em] mt-1">CARDS</div>
-           </div>
-           <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]"></div>
-        </div>
-
-        {/* Front */}
-        <div className={`absolute w-full h-full backface-hidden rotate-y-180 rounded-xl overflow-hidden bg-slate-900 ${rarityClass} flex flex-col shadow-2xl shine-effect`}>
-          {isHighRarity && <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 mix-blend-overlay"></div>}
+      <motion.div 
+        className="w-full h-full relative"
+        initial={false}
+        animate={{ rotateY: isFlipped ? 0 : 180 }}
+        transition={{ duration: 0.6, type: "spring", stiffness: 260, damping: 20 }}
+        style={{ transformStyle: 'preserve-3d' }}
+      >
+        {/* Front of Card (Face Up) */}
+        <div 
+          className={`absolute inset-0 rounded-xl overflow-hidden bg-slate-900 flex flex-col shadow-2xl backface-hidden ${rarityColor.split(' ').pop()}`}
+          style={{ backfaceVisibility: 'hidden', transform: 'rotateY(0deg)' }}
+        >
+          {/* Border / Frame Glow */}
+          <div className={`absolute inset-0 border-[3px] rounded-xl z-20 pointer-events-none opacity-80 ${rarityColor.split(' ')[1]}`}></div>
           
-          <div className="h-[52%] w-full bg-black relative overflow-hidden">
+          {/* Holographic Foil for High Rarity */}
+          {isHighRarity && (
+            <div className="absolute inset-0 z-30 opacity-30 mix-blend-color-dodge pointer-events-none bg-gradient-to-tr from-transparent via-white/20 to-transparent holo-shimmer group-hover:opacity-50 transition-opacity"></div>
+          )}
+
+          {/* Image Layer */}
+          <div className="absolute inset-0 bg-black">
              {card.is_video ? (
-                <video src={card.image_url} autoPlay loop muted playsInline className="w-full h-full object-cover" />
+                <video src={card.image_url} autoPlay loop muted playsInline className="w-full h-full object-cover opacity-90 glitch-hover" />
              ) : (
-                <img src={card.image_url || 'https://picsum.photos/300/400'} alt={card.name} className="w-full h-full object-cover" />
+                <img src={card.image_url || 'https://picsum.photos/300/400'} alt={card.name} className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-110 glitch-hover" />
              )}
-             <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-slate-900 to-transparent"></div>
-             {card.is_new && <div className="absolute top-2 right-2 z-30 bg-yellow-500 text-black text-[9px] font-black px-2 py-0.5 rounded-sm shadow-lg animate-bounce">NEW</div>}
+             {/* Gradient Overlay for Text Readability */}
+             <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent opacity-90"></div>
           </div>
 
-          <div className="flex-1 p-3 flex flex-col relative z-20 bg-slate-900">
-            <div className="flex justify-between items-start mb-1">
-              <h3 className="font-heading font-black text-[13px] leading-none text-white tracking-tight uppercase truncate" title={card.name}>{card.name}</h3>
-              {showQuantity && (card.quantity || 0) > 1 && <span className="bg-indigo-600/50 border border-indigo-400/30 text-[10px] px-1.5 py-0.5 rounded text-white font-mono font-bold shrink-0 ml-1">x{card.quantity}</span>}
+          {/* New Tag */}
+          {card.is_new && (
+            <div className="absolute -top-1 -right-1 z-40 bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-[10px] font-black px-3 py-1 skew-x-[-10deg] shadow-lg border-b-2 border-l-2 border-black/20 font-heading">
+              NEW
             </div>
-            
-            <div className="flex items-center gap-0.5 mb-2">
-              {Array.from({ length: getRarityStars(card.rarity) }).map((_, i) => (
-                <Star key={i} size={10} className="fill-current text-yellow-500 drop-shadow-[0_0_2px_rgba(234,179,8,0.8)]" />
-              ))}
+          )}
+
+          {/* Content Layer */}
+          <div className="relative z-20 flex flex-col h-full p-4 justify-between">
+            {/* Header */}
+            <div className="flex justify-between items-start">
+               <div className={`flex items-center gap-1.5 px-2 py-1 rounded-sm bg-black/60 backdrop-blur-md border border-white/10 ${rarityColor.split(' ')[0]}`}>
+                 {getRarityIcon()}
+                 <span className="text-[10px] font-black uppercase tracking-wider font-heading">{card.rarity === 'Super-Rare' ? 'S. RARE' : card.rarity}</span>
+               </div>
+               {showQuantity && (card.quantity || 0) > 1 && (
+                 <div className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-sm shadow-lg border border-indigo-400/30 font-mono">
+                   x{card.quantity}
+                 </div>
+               )}
             </div>
 
-            <p className="text-[10px] text-slate-400 leading-relaxed font-medium line-clamp-3">
-              {card.description || card.flavor_text || "Standard issue digital asset."}
-            </p>
-            
-            <div className="mt-auto pt-2 border-t border-slate-800/50 flex justify-between items-center">
-               <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">{card.card_type}</span>
-               {card.set_name && <span className="text-[9px] font-mono text-indigo-400/70">{card.set_name}</span>}
+            {/* Footer / Info */}
+            <div>
+              <div className="mb-2">
+                <h3 className="font-heading font-black text-sm leading-tight text-white tracking-wide drop-shadow-md uppercase mb-1 truncate">{card.name}</h3>
+                <div className="flex items-center gap-2 mb-2">
+                   <div className="h-0.5 w-8 bg-current rounded-full opacity-50"></div>
+                   <span className="text-[9px] font-mono text-slate-300 uppercase tracking-widest">{card.card_type}</span>
+                </div>
+              </div>
+              
+              <div className="bg-slate-950/80 backdrop-blur-sm rounded-sm p-2 border border-white/10 group-hover:border-white/20 transition-colors">
+                <p className="text-[9px] text-slate-300 leading-relaxed font-medium line-clamp-3 italic opacity-90 font-mono">
+                  "{card.description || card.flavor_text || "Standard issue digital card."}"
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+
+        {/* Back of Card (Face Down) */}
+        <div 
+          className="absolute inset-0 rounded-xl border-[3px] border-slate-700 bg-slate-900 flex items-center justify-center overflow-hidden shadow-2xl backface-hidden"
+          style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
+        >
+           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-900 via-slate-900 to-black"></div>
+           
+           {/* Tech Pattern */}
+           <div className="absolute inset-0 opacity-10" style={{ 
+             backgroundImage: 'linear-gradient(0deg, transparent 24%, rgba(255, 255, 255, .3) 25%, rgba(255, 255, 255, .3) 26%, transparent 27%, transparent 74%, rgba(255, 255, 255, .3) 75%, rgba(255, 255, 255, .3) 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, rgba(255, 255, 255, .3) 25%, rgba(255, 255, 255, .3) 26%, transparent 27%, transparent 74%, rgba(255, 255, 255, .3) 75%, rgba(255, 255, 255, .3) 76%, transparent 77%, transparent)',
+             backgroundSize: '30px 30px'
+           }}></div>
+
+           <div className="relative z-10 text-center transform group-hover:scale-105 transition-transform duration-500">
+             <div className="w-16 h-16 mx-auto mb-3 border-2 border-indigo-500/30 rounded-full flex items-center justify-center bg-indigo-500/10 backdrop-blur-sm relative">
+                <div className="absolute inset-0 rounded-full border border-t-indigo-400 border-r-transparent border-b-indigo-400 border-l-transparent animate-spin"></div>
+                <Zap size={24} className="text-indigo-400" />
+             </div>
+             <div className="font-heading text-xl font-black text-white tracking-tighter drop-shadow-[2px_2px_0_rgba(236,72,153,1)]">FRY<span className="text-indigo-500">CARDS</span></div>
+             <div className="text-[8px] font-mono text-slate-500 tracking-[0.3em] mt-1">SECURE CARD</div>
+           </div>
+        </div>
+      </motion.div>
     </div>
   );
 };

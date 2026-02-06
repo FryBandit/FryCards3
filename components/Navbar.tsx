@@ -50,7 +50,7 @@ const Navbar: React.FC = () => {
 
           {/* User Stats / Mobile Toggle */}
           <div className="flex items-center gap-4">
-            {dashboard && (
+            {dashboard && dashboard.profile ? (
               <div className="flex items-center gap-3 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700">
                  <div className="flex items-center gap-1">
                    <Coins size={16} className="text-yellow-400" />
@@ -61,6 +61,12 @@ const Navbar: React.FC = () => {
                    <Diamond size={16} className="text-cyan-400" />
                    <span className="text-sm font-mono">{dashboard.profile.gem_balance.toLocaleString()}</span>
                  </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700 animate-pulse">
+                <div className="w-16 h-4 bg-slate-700 rounded"></div>
+                <div className="w-px h-4 bg-slate-600"></div>
+                <div className="w-16 h-4 bg-slate-700 rounded"></div>
               </div>
             )}
             

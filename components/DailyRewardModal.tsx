@@ -34,7 +34,7 @@ const DailyRewardModal: React.FC<DailyRewardModalProps> = ({ isOpen, onClose, st
         onClose();
         setReward(null);
         setClaiming(false);
-      }, 4000);
+      }, 6000);
       
     } catch (error: any) {
       console.error('Error claiming daily reward:', error);

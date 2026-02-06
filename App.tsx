@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { GameProvider, useGame } from './context/GameContext';
@@ -9,6 +10,7 @@ import Leaderboard from './views/Leaderboard';
 import Marketplace from './views/Marketplace';
 import QuestsAndAchievements from './views/QuestsAndAchievements';
 import Login from './views/Login';
+import Toast from './components/Toast';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useGame();
@@ -53,10 +55,16 @@ const RouterRoutes: React.FC = () => {
   );
 }
 
+const GlobalUI: React.FC = () => {
+  const { toasts, removeToast } = useGame();
+  return <Toast toasts={toasts} removeToast={removeToast} />;
+}
+
 const AppContent: React.FC = () => {
   const { user } = useGame();
   return (
     <Router>
+       <GlobalUI />
        <Routes>
          <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
          <Route path="/*" element={

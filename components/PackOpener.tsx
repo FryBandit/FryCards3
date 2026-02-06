@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import { PackResult } from '../types';
 import CardDisplay from './CardDisplay';
 import { X, Sparkles, ChevronRight } from 'lucide-react';
 import Confetti from 'react-confetti';
+import { SOUNDS } from '../constants';
 
 interface PackOpenerProps {
   packResult: PackResult | null;
@@ -15,15 +17,40 @@ const PackOpener: React.FC<PackOpenerProps> = ({ packResult, onClose, packImage 
   const [revealedCards, setRevealedCards] = useState<number[]>([]);
   const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
+  // Audio Refs
+  const sfxHover = useRef(new Audio(SOUNDS.HOVER));
+  const sfxClick = useRef(new Audio(SOUNDS.CLICK));
+  const sfxShake = useRef(new Audio(SOUNDS.PACK_SHAKE));
+  const sfxOpen = useRef(new Audio(SOUNDS.PACK_OPEN));
+  const sfxRevealCommon = useRef(new Audio(SOUNDS.REVEAL_COMMON));
+  const sfxRevealRare = useRef(new Audio(SOUNDS.REVEAL_RARE));
+  const sfxRevealLegendary = useRef(new Audio(SOUNDS.REVEAL_LEGENDARY));
+  const sfxSuccess = useRef(new Audio(SOUNDS.SUCCESS));
+
   useEffect(() => {
     const handleResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const triggerHaptic = (pattern: number | number[]) => {
+    if (navigator.vibrate) navigator.vibrate(pattern);
+  };
+
   useEffect(() => {
     if (packResult) {
-      const t1 = setTimeout(() => setStage('opening'), 1200);
+      // Shaking Stage
+      sfxShake.current.volume = 0.5;
+      sfxShake.current.play().catch(() => {});
+      triggerHaptic([50, 50, 50, 50]);
+
+      const t1 = setTimeout(() => {
+        setStage('opening');
+        sfxOpen.current.volume = 0.6;
+        sfxOpen.current.play().catch(() => {});
+        triggerHaptic(200);
+      }, 1200);
+
       const t2 = setTimeout(() => setStage('revealing'), 1800);
       return () => { clearTimeout(t1); clearTimeout(t2); };
     }
@@ -32,12 +59,29 @@ const PackOpener: React.FC<PackOpenerProps> = ({ packResult, onClose, packImage 
   const handleCardClick = (index: number) => {
     if (stage === 'revealing' && !revealedCards.includes(index)) {
       setRevealedCards(prev => [...prev, index]);
+      
+      const card = packResult?.cards[index];
+      if (card) {
+        if (['Mythic', 'Divine'].includes(card.rarity)) {
+           sfxRevealLegendary.current.play().catch(() => {});
+           triggerHaptic([100, 50, 100]);
+        } else if (['Rare', 'Super-Rare'].includes(card.rarity)) {
+           sfxRevealRare.current.play().catch(() => {});
+           triggerHaptic(50);
+        } else {
+           sfxRevealCommon.current.play().catch(() => {});
+           triggerHaptic(20);
+        }
+      }
     }
   };
 
   useEffect(() => {
     if (packResult && revealedCards.length === packResult.cards.length && stage === 'revealing') {
-      const t = setTimeout(() => setStage('summary'), 1200);
+      const t = setTimeout(() => {
+        setStage('summary');
+        sfxSuccess.current.play().catch(() => {});
+      }, 1200);
       return () => clearTimeout(t);
     }
   }, [revealedCards, packResult, stage]);
@@ -45,7 +89,7 @@ const PackOpener: React.FC<PackOpenerProps> = ({ packResult, onClose, packImage 
   if (!packResult) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/95 backdrop-blur-2xl">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/95 backdrop-blur-2xl overflow-y-auto">
       {stage === 'summary' && <Confetti width={windowSize.width} height={windowSize.height} recycle={false} numberOfPieces={300} />}
 
       <button onClick={onClose} className="absolute top-8 right-8 p-3 text-slate-500 hover:text-white bg-slate-900/50 rounded-full z-50 border border-slate-700">
@@ -64,7 +108,7 @@ const PackOpener: React.FC<PackOpenerProps> = ({ packResult, onClose, packImage 
       )}
 
       {(stage === 'revealing' || stage === 'summary') && (
-        <div className="w-full max-w-7xl px-8 flex flex-col items-center">
+        <div className="w-full max-w-7xl px-8 flex flex-col items-center py-10">
           <div className="flex flex-wrap justify-center gap-6 mb-12">
             {packResult.cards.map((card, index) => (
               <div key={index} className={`transition-all duration-500 ${stage === 'summary' ? 'scale-90 opacity-80' : 'scale-100'}`} style={{ transitionDelay: `${index * 50}ms` }}>
@@ -74,7 +118,7 @@ const PackOpener: React.FC<PackOpenerProps> = ({ packResult, onClose, packImage 
           </div>
 
           {stage === 'revealing' && (
-             <button onClick={() => setRevealedCards(packResult.cards.map((_, i) => i))} className="bg-indigo-600 hover:bg-indigo-500 text-white px-12 py-4 rounded-full font-heading font-black tracking-widest shadow-xl flex items-center gap-2">
+             <button onClick={() => setRevealedCards(packResult.cards.map((_, i) => i))} className="bg-indigo-600 hover:bg-indigo-500 text-white px-12 py-4 rounded-sm font-heading font-black tracking-widest shadow-xl flex items-center gap-2">
                QUICK REVEAL <ChevronRight size={20} />
              </button>
           )}
@@ -84,16 +128,16 @@ const PackOpener: React.FC<PackOpenerProps> = ({ packResult, onClose, packImage 
               <Sparkles className="mx-auto text-indigo-400 mb-4" size={40} />
               <h2 className="text-3xl font-heading font-black mb-6">SYNC COMPLETE</h2>
               <div className="grid grid-cols-2 gap-4 mb-8 text-center">
-                <div className="bg-slate-800 p-4 rounded-2xl">
-                  <div className="text-[10px] text-slate-500 uppercase">XP Gained</div>
+                <div className="bg-slate-800 p-4 rounded-xl">
+                  <div className="text-[10px] text-slate-500 uppercase font-mono mb-1">XP Gained</div>
                   <div className="text-2xl font-heading text-yellow-400">+{packResult.xp_gained}</div>
                 </div>
-                <div className="bg-slate-800 p-4 rounded-2xl">
-                  <div className="text-[10px] text-slate-500 uppercase">New Assets</div>
+                <div className="bg-slate-800 p-4 rounded-xl">
+                  <div className="text-[10px] text-slate-500 uppercase font-mono mb-1">New Cards</div>
                   <div className="text-2xl font-heading text-cyan-400">{packResult.new_card_count}</div>
                 </div>
               </div>
-              <button onClick={onClose} className="w-full bg-indigo-600 py-5 rounded-2xl font-heading font-black tracking-widest">CONFIRM & EXIT</button>
+              <button onClick={onClose} className="w-full bg-indigo-600 py-5 rounded-xl font-heading font-black tracking-widest hover:bg-indigo-500 transition-colors">CONFIRM & EXIT</button>
             </div>
           )}
         </div>

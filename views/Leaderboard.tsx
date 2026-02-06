@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { LeaderboardEntry } from '../types';
@@ -7,6 +8,7 @@ const Leaderboard: React.FC = () => {
   const [type, setType] = useState<'collection' | 'level' | 'packs_opened'>('collection');
   const [data, setData] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [cache, setCache] = useState<Record<string, LeaderboardEntry[]>>({});
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -15,20 +17,27 @@ const Leaderboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (cache[type]) {
+      setData(cache[type]);
+      return;
+    }
+
     let ignore = false;
     setLoading(true);
-    // Calls the existing RPC with the type string: 'collection', 'level', or 'packs_opened'
     supabase.rpc('get_leaderboard', { p_type: type, p_limit: 50 }).then(({ data, error }) => {
       if (ignore) return;
-      if (!error) {
-        if (mountedRef.current) setData(data || []);
+      if (!error && data) {
+        if (mountedRef.current) {
+          setData(data);
+          setCache(prev => ({ ...prev, [type]: data }));
+        }
       } else {
         console.error(error);
       }
       if (mountedRef.current) setLoading(false);
     });
     return () => { ignore = true; };
-  }, [type]);
+  }, [type, cache]);
 
   const getIcon = () => {
     switch(type) {
@@ -78,64 +87,67 @@ const Leaderboard: React.FC = () => {
       </div>
 
       <div className="glass rounded-[2rem] overflow-hidden border border-slate-700/50 shadow-2xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="bg-slate-900/80 border-b border-slate-700 text-slate-400 text-xs uppercase tracking-widest font-bold">
-                <th className="p-6 text-center w-24">Rank</th>
-                <th className="p-6">Operative</th>
-                <th className="p-6 text-right flex items-center justify-end gap-2">
-                  {getIcon()} 
-                  {getLabel()}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                 <tr>
-                   <td colSpan={3} className="p-12 text-center text-slate-500">
-                     <div className="flex justify-center mb-4">
-                       <div className="animate-spin h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full"></div>
-                     </div>
-                     LOADING DATA STREAM...
-                   </td>
-                 </tr>
-              ) : data.length === 0 ? (
-                <tr><td colSpan={3} className="p-12 text-center text-slate-500">No data found for this category.</td></tr>
-              ) : data.map((entry) => (
-                <tr key={entry.rank} className="border-b border-slate-700/30 hover:bg-white/5 transition-colors group">
-                  <td className="p-6 text-center">
-                    {entry.rank === 1 ? <div className="flex justify-center"><Crown className="text-yellow-400 drop-shadow-md" size={24} /></div> : 
-                     entry.rank === 2 ? <span className="text-slate-300 font-black text-lg">#2</span> :
-                     entry.rank === 3 ? <span className="text-amber-700 font-black text-lg">#3</span> :
-                     <span className="text-slate-600 font-mono font-bold">#{entry.rank}</span>}
-                  </td>
-                  <td className="p-6 font-bold text-white text-lg">
-                    {entry.username}
-                    {entry.rank <= 3 && <span className="ml-2 inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>}
-                  </td>
-                  <td className="p-6 text-right font-mono font-bold text-lg text-indigo-300">
+        {loading ? (
+             <div className="p-12 text-center text-slate-500">
+               <div className="flex justify-center mb-4">
+                 <div className="animate-spin h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full"></div>
+               </div>
+               LOADING DATA STREAM...
+             </div>
+        ) : data.length === 0 ? (
+           <div className="p-12 text-center text-slate-500">No data found for this category.</div>
+        ) : (
+          <div className="w-full">
+            {/* Desktop Header */}
+            <div className="hidden md:grid grid-cols-12 bg-slate-900/80 border-b border-slate-700 text-slate-400 text-xs uppercase tracking-widest font-bold px-6 py-4">
+                <div className="col-span-2 text-center">Rank</div>
+                <div className="col-span-7">Operative</div>
+                <div className="col-span-3 text-right flex items-center justify-end gap-2">{getIcon()} {getLabel()}</div>
+            </div>
+
+            {/* List */}
+            <div>
+              {data.map((entry) => (
+                <div key={entry.rank} className="border-b border-slate-700/30 hover:bg-white/5 transition-colors group p-4 md:px-6 md:py-4 flex flex-col md:grid md:grid-cols-12 items-center gap-4">
+                  {/* Rank */}
+                  <div className="flex md:block items-center justify-center w-full md:w-auto md:col-span-2 text-center">
+                    {entry.rank === 1 ? <div className="inline-block p-2 bg-yellow-400/10 rounded-full border border-yellow-400/20"><Crown className="text-yellow-400 drop-shadow-md" size={24} /></div> : 
+                     entry.rank === 2 ? <span className="text-slate-300 font-black text-2xl md:text-lg">#2</span> :
+                     entry.rank === 3 ? <span className="text-amber-700 font-black text-2xl md:text-lg">#3</span> :
+                     <span className="text-slate-600 font-mono font-bold text-xl md:text-base">#{entry.rank}</span>}
+                  </div>
+
+                  {/* Operative */}
+                  <div className="col-span-7 font-bold text-white text-lg w-full text-center md:text-left">
+                    <div className="flex items-center justify-center md:justify-start gap-2">
+                      {entry.username}
+                      {entry.rank <= 3 && <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>}
+                    </div>
+                  </div>
+
+                  {/* Score */}
+                  <div className="col-span-3 w-full text-center md:text-right font-mono font-bold text-lg text-indigo-300 bg-slate-900/40 md:bg-transparent rounded-xl py-2 md:py-0">
                     {type === 'collection' && (
-                      <div className="flex flex-col items-end">
+                      <div className="flex flex-col items-center md:items-end">
                         <span>{entry.completion_percentage}%</span>
                         <span className="text-xs text-slate-600 font-normal">{entry.unique_cards} Cards</span>
                       </div>
                     )}
                     {type === 'level' && (
-                      <div className="flex flex-col items-end">
-                        <span>Lvl {entry.level}</span>
+                      <div className="flex flex-col items-center md:items-end">
+                        <span>Lvl {entry.level || 0}</span>
                         <span className="text-xs text-slate-600 font-normal">{entry.xp?.toLocaleString()} XP</span>
                       </div>
                     )}
                     {type === 'packs_opened' && (
                       <span className="text-orange-400">{entry.packs_opened?.toLocaleString()}</span>
                     )}
-                  </td>
-                </tr>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -4,14 +4,23 @@ import { supabase } from '../supabaseClient';
 import { User } from '@supabase/supabase-js';
 import { DashboardData } from '../types';
 
+export interface ToastMessage {
+  id: string;
+  message: string;
+  type: 'success' | 'error' | 'info';
+}
+
 interface GameContextType {
   user: User | null;
   dashboard: DashboardData | null;
   loading: boolean;
   error: string | null;
+  toasts: ToastMessage[];
   refreshDashboard: () => Promise<void>;
   signInWithDiscord: () => Promise<void>;
   signOut: () => Promise<void>;
+  showToast: (message: string, type: 'success' | 'error' | 'info') => void;
+  removeToast: (id: string) => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -21,6 +30,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
   
   const refreshInProgress = useRef(false);
   const mountedRef = useRef(true);
@@ -28,6 +38,19 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
+  }, []);
+
+  // Toast System
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info') => {
+    const id = Math.random().toString(36).substring(7);
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4000);
+  }, []);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
   const refreshDashboard = useCallback(async () => {
@@ -46,51 +69,25 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // Recovery flow
-      let { data: profile } = await supabase
+      // Attempt to fetch profile directly if dashboard RPC fails
+      const { data: profile } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single();
 
-      if (!profile) {
-         const newProfile = {
-           id: user.id,
-           username: user.user_metadata?.full_name || user.email?.split('@')[0] || `User_${user.id.slice(0,4)}`,
-           gold_balance: 500,
-           gem_balance: 50,
-           xp: 0,
-           level: 1,
-           packs_opened: 0,
-           pity_counter: 0,
-           daily_streak: 1,
-           last_daily_claim: new Date().toISOString()
-         };
-
-         const { data: insertedProfile, error: insertError } = await supabase
-           .from('profiles')
-           .insert([newProfile])
-           .select()
-           .single();
-
-         if (insertError) throw insertError;
-         profile = insertedProfile;
-      }
-
-      const { data: retryData } = await supabase.rpc('get_user_dashboard', {
-        p_user_id: user.id,
-      });
-
-      if (retryData && retryData.stats && mountedRef.current) {
-        setDashboard(retryData);
-      } else {
-        const fallback: DashboardData = {
+      if (profile) {
+         // If profile exists but RPC failed, construct minimal dashboard
+         const fallback: DashboardData = {
           profile: profile as any,
-          stats: { total_cards: 0, unique_cards: 0, total_possible: 100, completion_percentage: 0, rarity_breakdown: [], set_completion: [] },
+          stats: { total_cards: 0, unique_cards: 0, total_possible: 0, completion_percentage: 0, rarity_breakdown: [], set_completion: [] },
           missions: [],
           can_claim_daily: false
         };
         if (mountedRef.current) setDashboard(fallback);
+      } else {
+        // Only throw if we really can't find a profile (User needs to sign up/db trigger failed)
+        if (rpcError) throw rpcError;
       }
 
     } catch (err: any) {
@@ -138,7 +135,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     if (error && mountedRef.current) {
       setLoading(false);
-      alert(error.message);
+      showToast(error.message, 'error');
     }
   };
 
@@ -152,7 +149,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <GameContext.Provider value={{ user, dashboard, loading, error, refreshDashboard, signInWithDiscord, signOut }}>
+    <GameContext.Provider value={{ user, dashboard, loading, error, toasts, refreshDashboard, signInWithDiscord, signOut, showToast, removeToast }}>
       {children}
     </GameContext.Provider>
   );

@@ -1,119 +1,190 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FryCards TCG | Premium Digital Collection</title>
+    <title>FryCards TCG | Retro Digital Collection</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              // Remap Slate to Deep Purple Palette
+              slate: {
+                50: '#f5f3ff',
+                100: '#ede9fe',
+                200: '#ddd6fe',
+                300: '#c4b5fd',
+                400: '#a78bfa',
+                500: '#8b5cf6',
+                600: '#7c3aed',
+                700: '#6d28d9',
+                800: '#5b21b6', // Lighter purple for cards
+                900: '#2e1065', // Deep purple background
+                950: '#170536', // Darker purple
+              },
+              // Remap Indigo to Hot Pink (Miami Vibe)
+              indigo: {
+                400: '#f472b6',
+                500: '#ec4899',
+                600: '#db2777',
+              },
+              // Cyan stays Cyan for that blue/pink contrast
+              cyan: {
+                400: '#22d3ee',
+                500: '#06b6d4',
+              }
+            },
+            fontFamily: {
+              heading: ['"Press Start 2P"', 'cursive'],
+              sans: ['"Roboto Mono"', 'monospace'],
+              mono: ['"Roboto Mono"', 'monospace'],
+            }
+          }
+        }
+      }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Roboto+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
       :root {
-        --color-bg: #020617;
-        --color-card-bg: #0f172a;
+        --color-bg: #2e1065;
+        --color-card-bg: #4c1d95;
         --rarity-common: #94a3b8;
-        --rarity-uncommon: #22c55e;
-        --rarity-rare: #3b82f6;
-        --rarity-super-rare: #a855f7;
-        --rarity-mythic: #f97316;
-        --rarity-divine: #eab308;
+        --rarity-uncommon: #34d399;
+        --rarity-rare: #60a5fa;
+        --rarity-super-rare: #e879f9;
+        --rarity-mythic: #fb923c;
+        --rarity-divine: #facc15;
       }
 
       body {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Roboto Mono', monospace;
         background-color: var(--color-bg);
         color: white;
         overflow-x: hidden;
-        -webkit-font-smoothing: antialiased;
+        -webkit-font-smoothing: none; /* Retro feel */
       }
 
-      h1, h2, h3, h4, h5, h6, .font-heading {
-        font-family: 'Orbitron', sans-serif;
+      /* Scanline Effect */
+      body::after {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: linear-gradient(
+          to bottom,
+          rgba(255, 255, 255, 0),
+          rgba(255, 255, 255, 0) 50%,
+          rgba(0, 0, 0, 0.2) 50%,
+          rgba(0, 0, 0, 0.2)
+        );
+        background-size: 100% 4px;
+        z-index: 9999;
+        pointer-events: none;
+        opacity: 0.6;
       }
 
+      /* CRT Flicker */
+      @keyframes flicker {
+        0% { opacity: 0.97; }
+        5% { opacity: 0.95; }
+        10% { opacity: 0.9; }
+        15% { opacity: 0.95; }
+        20% { opacity: 0.99; }
+        50% { opacity: 0.95; }
+        80% { opacity: 0.9; }
+        100% { opacity: 0.97; }
+      }
+
+      #root {
+        animation: flicker 4s infinite;
+      }
+
+      /* Retro Grid Background */
       .bg-space {
         background: 
-          radial-gradient(circle at 50% 50%, rgba(30, 58, 138, 0.15) 0%, transparent 100%),
-          radial-gradient(circle at 0% 0%, rgba(79, 70, 229, 0.1) 0%, transparent 50%),
-          radial-gradient(circle at 100% 100%, rgba(6, 182, 212, 0.1) 0%, transparent 50%);
+          linear-gradient(transparent 95%, rgba(236, 72, 153, 0.3) 95%),
+          linear-gradient(90deg, transparent 95%, rgba(6, 182, 212, 0.3) 95%),
+          radial-gradient(circle at 50% 0%, #4c1d95 0%, #2e1065 60%);
+        background-size: 40px 40px, 40px 40px, 100% 100%;
         background-attachment: fixed;
       }
 
-      ::-webkit-scrollbar { width: 8px; }
-      ::-webkit-scrollbar-track { background: #0f172a; }
-      ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
-      ::-webkit-scrollbar-thumb:hover { background: #334155; }
+      h1, h2, h3, h4, h5, h6, .font-heading {
+        font-family: 'Press Start 2P', cursive;
+        text-transform: uppercase;
+        letter-spacing: -1px;
+        text-shadow: 2px 2px 0px #ec4899;
+      }
 
-      .rarity-common { border: 1px solid rgba(148, 163, 184, 0.3); }
-      .rarity-uncommon { border: 2px solid var(--rarity-uncommon); box-shadow: 0 0 15px rgba(34, 197, 94, 0.2); }
-      .rarity-rare { border: 2px solid var(--rarity-rare); box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); }
-      .rarity-super-rare { border: 2px solid var(--rarity-super-rare); box-shadow: 0 0 25px rgba(168, 85, 247, 0.4); }
-      .rarity-mythic { border: 2px solid var(--rarity-mythic); box-shadow: 0 0 30px rgba(249, 115, 22, 0.5); }
+      ::-webkit-scrollbar { width: 10px; }
+      ::-webkit-scrollbar-track { background: #2e1065; border-left: 1px solid #ec4899; }
+      ::-webkit-scrollbar-thumb { background: #ec4899; border: 2px solid #2e1065; }
+      ::-webkit-scrollbar-thumb:hover { background: #db2777; }
+
+      .rarity-common { border-color: var(--rarity-common); }
+      .rarity-uncommon { border-color: var(--rarity-uncommon); box-shadow: 0 0 10px rgba(52, 211, 153, 0.5); }
+      .rarity-rare { border-color: var(--rarity-rare); box-shadow: 0 0 15px rgba(96, 165, 250, 0.6); }
+      .rarity-super-rare { border-color: var(--rarity-super-rare); box-shadow: 0 0 20px rgba(232, 121, 249, 0.7); }
+      .rarity-mythic { border-color: var(--rarity-mythic); box-shadow: 0 0 25px rgba(251, 146, 60, 0.8); }
       .rarity-divine { 
-        border: 2px solid var(--rarity-divine); 
-        box-shadow: 0 0 40px rgba(234, 179, 8, 0.6);
-        animation: divine-pulse 2s infinite alternate;
+        border-color: var(--rarity-divine); 
+        box-shadow: 0 0 40px rgba(250, 204, 21, 0.9);
+        animation: divine-pulse 1s steps(2) infinite;
       }
 
       @keyframes divine-pulse {
-        from { box-shadow: 0 0 25px rgba(234, 179, 8, 0.4); transform: scale(1); }
-        to { box-shadow: 0 0 50px rgba(234, 179, 8, 0.8); transform: scale(1.01); }
+        from { box-shadow: 0 0 20px rgba(250, 204, 21, 0.5); }
+        to { box-shadow: 0 0 50px rgba(250, 204, 21, 0.9); }
       }
 
-      .shine-effect {
-        position: relative;
-        overflow: hidden;
-      }
-      .shine-effect::after {
-        content: "";
-        position: absolute;
-        top: -110%;
-        left: -210%;
-        width: 200%;
-        height: 200%;
-        opacity: 0;
-        transform: rotate(30deg);
+      .holo-shimmer {
         background: linear-gradient(
-          to right,
-          rgba(255, 255, 255, 0.13) 0%,
-          rgba(255, 255, 255, 0.13) 77%,
-          rgba(255, 255, 255, 0.5) 92%,
-          rgba(255, 255, 255, 0.0) 100%
+          115deg,
+          transparent 20%,
+          rgba(255, 255, 255, 0.4) 30%,
+          rgba(6, 182, 212, 0.6) 40%,
+          rgba(236, 72, 153, 0.6) 50%,
+          rgba(6, 182, 212, 0.6) 60%,
+          rgba(255, 255, 255, 0.4) 70%,
+          transparent 80%
         );
-      }
-      .shine-effect:hover::after {
-        opacity: 1;
-        top: -30%;
-        left: -30%;
-        transition: left 0.7s, top 0.7s, opacity 0.15s ease;
+        background-size: 200% 200%;
+        animation: hologram 2s linear infinite;
       }
 
-      .animate-pack-shake {
-        animation: pack-shake 0.3s cubic-bezier(.36,.07,.19,.97) infinite;
-      }
-      @keyframes pack-shake {
-        10%, 90% { transform: translate3d(-1px, 0, 0) rotate(-1deg); }
-        20%, 80% { transform: translate3d(2px, 0, 0) rotate(1deg); }
-        30%, 50%, 70% { transform: translate3d(-4px, 0, 0) rotate(-2deg); }
-        40%, 60% { transform: translate3d(4px, 0, 0) rotate(2deg); }
+      @keyframes hologram {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
       }
 
-      .perspective-1000 { perspective: 1000px; }
-      .transform-style-3d { transform-style: preserve-3d; }
-      .backface-hidden { backface-visibility: hidden; }
-      .rotate-y-180 { transform: rotateY(180deg); }
-      
       .glass {
-        background: rgba(15, 23, 42, 0.8);
-        backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(46, 16, 101, 0.8);
+        backdrop-filter: blur(8px);
+        border: 2px solid rgba(236, 72, 153, 0.3);
+        box-shadow: 4px 4px 0px rgba(6, 182, 212, 0.2);
       }
 
-      @keyframes fade-in {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
       .animate-fade-in {
-        animation: fade-in 0.5s ease-out forwards;
+        animation: fade-in 0.4s steps(5) forwards;
+      }
+
+      /* Glitch Effect on hover for cards */
+      .glitch-hover:hover {
+        animation: glitch 0.3s cubic-bezier(.25, .46, .45, .94) both infinite;
+      }
+
+      @keyframes glitch {
+        0% { transform: translate(0) }
+        20% { transform: translate(-2px, 2px) }
+        40% { transform: translate(-2px, -2px) }
+        60% { transform: translate(2px, 2px) }
+        80% { transform: translate(2px, -2px) }
+        100% { transform: translate(0) }
       }
     </style>
     <script type="importmap">
@@ -128,13 +199,13 @@
     "react-confetti": "https://esm.sh/react-confetti@6.1.0?deps=react@18.2.0",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.8",
     "framer-motion": "https://esm.sh/framer-motion@10.16.4?deps=react@18.2.0,react-dom@18.2.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "react/": "https://esm.sh/react@^19.2.4/"
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/"
   }
 }
 </script>
   </head>
-  <body class="bg-space">
+  <body class="bg-space text-slate-200">
     <div id="root"></div>
     <script type="module" src="./index.tsx"></script>
   </body>
