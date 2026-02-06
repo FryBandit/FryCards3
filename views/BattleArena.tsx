@@ -4,7 +4,7 @@ import { useGame } from '../context/GameContext';
 import { supabase } from '../supabaseClient';
 import { Card, Deck, BattleState } from '../types';
 import CardDisplay from '../components/CardDisplay';
-import { Sword, Zap, Shield, ChevronRight, Trophy, RotateCcw, Activity, Layout } from 'lucide-react';
+import { Sword, Zap, Shield, ChevronRight, Trophy, RotateCcw, Activity, Layout, Skull } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const BattleArena: React.FC = () => {
@@ -19,6 +19,10 @@ const BattleArena: React.FC = () => {
     log: ['BATTLE SYSTEM INITIALIZED'],
     isFinished: false
   });
+  
+  // Animation states
+  const [shakePlayer, setShakePlayer] = useState(false);
+  const [shakeOpponent, setShakeOpponent] = useState(false);
 
   const battleLogEndRef = useRef<HTMLDivElement>(null);
 
@@ -65,6 +69,15 @@ const BattleArena: React.FC = () => {
       const newOpponentHP = isPlayerTurn ? Math.max(0, prev.opponentHP - finalDamage) : prev.opponentHP;
       const newPlayerHP = !isPlayerTurn ? Math.max(0, prev.playerHP - finalDamage) : prev.playerHP;
       
+      // Trigger animations
+      if (isPlayerTurn) {
+         setShakeOpponent(true);
+         setTimeout(() => setShakeOpponent(false), 500);
+      } else {
+         setShakePlayer(true);
+         setTimeout(() => setShakePlayer(false), 500);
+      }
+      
       const finished = newOpponentHP <= 0 || newPlayerHP <= 0;
       const winner = newOpponentHP <= 0 ? 'player' : (newPlayerHP <= 0 ? 'opponent' : undefined);
 
@@ -82,6 +95,17 @@ const BattleArena: React.FC = () => {
         winner
       };
     });
+  };
+
+  const surrender = () => {
+      if(!confirm("Abort mission? This counts as a loss.")) return;
+      setBattle(prev => ({
+          ...prev,
+          playerHP: 0,
+          isFinished: true,
+          winner: 'opponent',
+          log: [...prev.log, 'PLAYER SURRENDERED. MISSION FAILED.']
+      }));
   };
 
   // Auto opponent turn
@@ -142,7 +166,7 @@ const BattleArena: React.FC = () => {
        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch flex-1">
           
           {/* Left: Player Field */}
-          <div className="lg:col-span-4 flex flex-col justify-between">
+          <div className={`lg:col-span-4 flex flex-col justify-between transition-transform ${shakePlayer ? 'translate-x-[-10px]' : ''}`}>
              <div className="space-y-4">
                 <div className="flex justify-between items-end">
                    <h2 className="font-heading text-xs text-white uppercase tracking-widest">OPERATOR: {user?.user_metadata?.full_name || 'GUEST'}</h2>
@@ -166,21 +190,28 @@ const BattleArena: React.FC = () => {
                 )}
              </div>
 
-             <button 
-               disabled={battle.turn !== 'player' || battle.isFinished}
-               onClick={() => executeTurn(true)}
-               className={`w-full py-6 rounded-sm font-heading font-black text-sm tracking-widest shadow-2xl transition-all
-                 ${battle.turn === 'player' 
-                   ? 'bg-indigo-600 text-white border-b-4 border-indigo-800 hover:brightness-110 active:translate-y-1 active:border-b-0' 
-                   : 'bg-slate-800 text-slate-500 cursor-wait'}
-               `}
-             >
-               {battle.turn === 'player' ? 'EXECUTE ATTACK' : 'WAITING FOR OPPONENT...'}
-             </button>
+             <div className="space-y-3">
+                 <button 
+                   disabled={battle.turn !== 'player' || battle.isFinished}
+                   onClick={() => executeTurn(true)}
+                   className={`w-full py-6 rounded-sm font-heading font-black text-sm tracking-widest shadow-2xl transition-all
+                     ${battle.turn === 'player' 
+                       ? 'bg-indigo-600 text-white border-b-4 border-indigo-800 hover:brightness-110 active:translate-y-1 active:border-b-0' 
+                       : 'bg-slate-800 text-slate-500 cursor-wait'}
+                   `}
+                 >
+                   {battle.turn === 'player' ? 'EXECUTE ATTACK' : 'WAITING FOR OPPONENT...'}
+                 </button>
+                 {!battle.isFinished && (
+                     <button onClick={surrender} className="w-full py-2 text-slate-600 text-[10px] font-bold uppercase hover:text-red-500 flex items-center justify-center gap-2">
+                         <Skull size={12} /> Surrender
+                     </button>
+                 )}
+             </div>
           </div>
 
           {/* Center: Battle Feed */}
-          <div className="lg:col-span-4 flex flex-col bg-slate-950/80 border-2 border-slate-800 rounded-sm overflow-hidden">
+          <div className="lg:col-span-4 flex flex-col bg-slate-950/80 border-2 border-slate-800 rounded-sm overflow-hidden h-[400px] lg:h-auto">
              <div className="bg-slate-900 px-4 py-2 border-b border-slate-800 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2">
                    <Activity size={14} className="text-indigo-500 animate-pulse" />
@@ -199,7 +230,7 @@ const BattleArena: React.FC = () => {
           </div>
 
           {/* Right: Opponent Field */}
-          <div className="lg:col-span-4 flex flex-col justify-between">
+          <div className={`lg:col-span-4 flex flex-col justify-between transition-transform ${shakeOpponent ? 'translate-x-[10px]' : ''}`}>
              <div className="space-y-4">
                 <div className="flex justify-between items-end">
                    <span className="font-mono text-xl font-black text-red-400">{battle.opponentHP}%</span>

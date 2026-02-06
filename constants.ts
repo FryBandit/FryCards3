@@ -31,15 +31,15 @@ export const MILL_VALUES: Record<string, number> = {
 
 export const CARD_BACK_IMAGE = 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=600&auto=format&fit=crop';
 
-// Sound Effects
+// Sound Effects - disabled due to 403 errors
 export const SOUNDS = {
-  HOVER: 'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3',
-  CLICK: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3',
-  PACK_SHAKE: 'https://assets.mixkit.co/active_storage/sfx/2044/2044-preview.mp3',
-  PACK_OPEN: 'https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3',
-  REVEAL_COMMON: 'https://assets.mixkit.co/active_storage/sfx/2578/2578-preview.mp3',
-  REVEAL_RARE: 'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3',
-  REVEAL_LEGENDARY: 'https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3',
-  SUCCESS: 'https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3',
-  ERROR: 'https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3'
+  HOVER: '',
+  CLICK: '',
+  PACK_SHAKE: '',
+  PACK_OPEN: '',
+  REVEAL_COMMON: '',
+  REVEAL_RARE: '',
+  REVEAL_LEGENDARY: '',
+  SUCCESS: '',
+  ERROR: ''
 };

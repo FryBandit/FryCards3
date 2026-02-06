@@ -3,23 +3,22 @@ import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { PackType, PackResult, AffordabilityCheck, Card } from '../types';
 import { useGame } from '../context/GameContext';
-import { Coins, Diamond, ShieldCheck, Sparkle, AlertTriangle, Eye, Sparkles } from 'lucide-react';
+import { Coins, Diamond, ShieldCheck, Sparkle, AlertTriangle, Eye, Sparkles, X, Check } from 'lucide-react';
 import PackOpener from '../components/PackOpener';
 import CardDisplay from '../components/CardDisplay';
 import { AnimatePresence, motion } from 'framer-motion';
 
 const Shop: React.FC = () => {
-  const { user, refreshDashboard } = useGame();
+  const { user, refreshDashboard, dashboard } = useGame();
   const [packs, setPacks] = useState<PackType[]>([]);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [packResult, setPackResult] = useState<PackResult | null>(null);
   const [openedPackImage, setOpenedPackImage] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
-  // Preview
-  const [previewPackId, setPreviewPackId] = useState<string | null>(null);
-  const [previewCards, setPreviewCards] = useState<Card[]>([]);
-  const [loadingPreview, setLoadingPreview] = useState(false);
+  // Payment Selection Modal
+  const [selectedPackForPayment, setSelectedPackForPayment] = useState<PackType | null>(null);
+  const [payWith, setPayWith] = useState<'gold' | 'gems'>('gold');
 
   const mountedRef = useRef(true);
 
@@ -41,55 +40,51 @@ const Shop: React.FC = () => {
     loadPacks();
   }, []);
 
-  const handlePreview = async (packId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (previewPackId === packId) {
-        setPreviewPackId(null);
-        return;
-    }
-    
-    setPreviewPackId(packId);
-    setLoadingPreview(true);
-    setPreviewCards([]);
+  const initiatePurchase = (pack: PackType) => {
+      // Determine if choice is needed
+      const hasGoldPrice = pack.cost_gold !== null;
+      const hasGemPrice = (pack.cost_gems || 0) > 0;
 
-    try {
-        const { data, error } = await supabase.rpc('get_pack_preview_cards', { p_pack_type_id: packId });
-        if (error) throw error;
-        if (mountedRef.current) setPreviewCards(data || []);
-    } catch (e) {
-        console.error(e);
-    } finally {
-        if (mountedRef.current) setLoadingPreview(false);
-    }
+      if (hasGoldPrice && hasGemPrice) {
+          setPayWith('gold');
+          setSelectedPackForPayment(pack);
+      } else {
+          // Auto-select currency logic based on availability
+          const useGems = !hasGoldPrice && hasGemPrice;
+          executePurchase(pack, useGems);
+      }
   };
 
-  const handleBuyPack = async (pack: PackType) => {
-    if (!user || loadingId) return; // Prevent double click
+  const executePurchase = async (pack: PackType, useGems: boolean) => {
+    if (!user || loadingId || !dashboard?.profile) return;
     setLoadingId(pack.id);
     setOpenedPackImage(pack.image_url);
     setErrorMsg(null);
+    setSelectedPackForPayment(null); // Close modal if open
 
     try {
-      // 1. Check Affordability
-      const { data: affordCheck, error: affordError } = await supabase.rpc('can_afford_pack', {
-        p_pack_type_id: pack.id
+      // 1. Check Affordability via RPC (optional but good practice before commit)
+      const { data: affordability, error: affError } = await supabase.rpc('can_afford_pack', {
+          p_user_id: user.id,
+          p_pack_type_id: pack.id
       });
-
-      if (affordError) {
-         throw new Error("Unable to verify funds. Please try again later.");
-      } else if (affordCheck) {
-         const check = affordCheck as AffordabilityCheck;
-         if (!check.can_afford) {
-            alert(`Insufficient Funds. Required: ${check.gold_needed > 0 ? check.gold_needed + ' Gold' : check.gems_needed + ' Gems'}`);
-            if (mountedRef.current) setLoadingId(null);
-            return;
-         }
+      
+      // Note: can_afford_pack RPC might not take currency preference, checking against user balance
+      // We can do a client check first to be faster
+      const cost = useGems ? pack.cost_gems : pack.cost_gold;
+      const balance = useGems ? dashboard.profile.gem_balance : dashboard.profile.gold_balance;
+      
+      if (balance < (cost || 0)) {
+          alert(`Insufficient ${useGems ? 'Gems' : 'Gold'}`);
+          if (mountedRef.current) setLoadingId(null);
+          return;
       }
 
       // 2. Open Pack
       const { data, error } = await supabase.rpc('open_pack', {
         p_user_id: user.id,
-        p_pack_type_id: pack.id
+        p_pack_type_id: pack.id,
+        p_use_gems: useGems
       });
 
       if (error) {
@@ -151,39 +146,12 @@ const Shop: React.FC = () => {
                
                <div className="relative z-10 flex flex-col items-center flex-1">
                  
-                 {previewPackId === pack.id ? (
-                     <div className="relative mb-8 h-64 w-full flex items-center justify-center">
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); setPreviewPackId(null); }}
-                            className="absolute -top-2 right-0 z-50 text-xs font-bold text-slate-400 hover:text-white"
-                        >
-                            CLOSE PREVIEW
-                        </button>
-                        {loadingPreview ? (
-                            <div className="animate-spin h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full"></div>
-                        ) : (
-                            <div className="flex -space-x-12 hover:space-x-2 transition-all duration-300">
-                                {previewCards.map((card, idx) => (
-                                    <div key={idx} className="transform hover:-translate-y-4 transition-transform duration-300 shadow-xl">
-                                        <CardDisplay card={card} size="sm" isFlipped={true} />
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                     </div>
-                 ) : (
                     <div className="relative mb-8 transform group-hover:scale-110 transition-transform duration-500">
                         <img 
                         src={pack.image_url} 
                         alt={pack.name} 
                         className="w-48 h-64 object-cover rounded-xl shadow-2xl drop-shadow-[4px_4px_0_rgba(6,182,212,0.8)] border-2 border-slate-900" 
                         />
-                        <button 
-                           onClick={(e) => handlePreview(pack.id, e)}
-                           className="absolute top-2 right-2 bg-slate-950/80 p-2 rounded-full text-white hover:bg-indigo-600 transition-colors shadow-lg border border-white/10"
-                        >
-                            <Eye size={16} />
-                        </button>
                         {pack.has_foil_slot && (
                             <div className="absolute -left-4 top-4 bg-gradient-to-r from-amber-300 to-yellow-500 text-black px-3 py-1 text-[10px] font-black uppercase transform -rotate-12 shadow-lg border border-white/20">
                                 FOIL INSIDE
@@ -196,7 +164,6 @@ const Shop: React.FC = () => {
                         </div>
                         )}
                     </div>
-                 )}
                  
                  <h3 className="text-xl font-heading font-black mb-2 text-white uppercase tracking-tight text-center leading-relaxed">{pack.name}</h3>
                  <p className="text-slate-300 text-xs text-center mb-6 font-medium px-4 min-h-[3rem] flex items-center justify-center font-mono">
@@ -217,7 +184,7 @@ const Shop: React.FC = () => {
 
                  <div className="mt-auto w-full">
                    <button 
-                     onClick={() => handleBuyPack(pack)}
+                     onClick={() => initiatePurchase(pack)}
                      disabled={loadingId === pack.id}
                      className={`group relative w-full py-5 rounded-sm font-heading font-black text-sm flex items-center justify-center gap-3 transition-all overflow-hidden
                        ${pack.cost_gold 
@@ -242,6 +209,53 @@ const Shop: React.FC = () => {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Payment Selection Modal */}
+      {selectedPackForPayment && (
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+              <div className="bg-slate-900 rounded-2xl p-8 max-w-sm w-full border border-slate-700 relative shadow-2xl">
+                  <button onClick={() => setSelectedPackForPayment(null)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X size={20}/></button>
+                  <h3 className="font-heading font-black text-white mb-6 text-center">SELECT PAYMENT</h3>
+                  
+                  <div className="space-y-3">
+                      <button 
+                          onClick={() => setPayWith('gold')}
+                          className={`w-full p-4 rounded-xl border-2 flex items-center justify-between ${payWith === 'gold' ? 'border-yellow-500 bg-yellow-500/10' : 'border-slate-800 bg-slate-950'}`}
+                      >
+                          <div className="flex items-center gap-3">
+                              <Coins className="text-yellow-400" />
+                              <div className="text-left">
+                                  <div className="font-bold text-white">GOLD</div>
+                                  <div className="text-xs text-slate-500">Balance: {dashboard?.profile.gold_balance}</div>
+                              </div>
+                          </div>
+                          <div className="font-mono font-bold text-white">{selectedPackForPayment.cost_gold}</div>
+                      </button>
+
+                      <button 
+                          onClick={() => setPayWith('gems')}
+                          className={`w-full p-4 rounded-xl border-2 flex items-center justify-between ${payWith === 'gems' ? 'border-cyan-500 bg-cyan-500/10' : 'border-slate-800 bg-slate-950'}`}
+                      >
+                          <div className="flex items-center gap-3">
+                              <Diamond className="text-cyan-400" />
+                              <div className="text-left">
+                                  <div className="font-bold text-white">GEMS</div>
+                                  <div className="text-xs text-slate-500">Balance: {dashboard?.profile.gem_balance}</div>
+                              </div>
+                          </div>
+                          <div className="font-mono font-bold text-white">{selectedPackForPayment.cost_gems}</div>
+                      </button>
+                  </div>
+
+                  <button 
+                    onClick={() => executePurchase(selectedPackForPayment, payWith === 'gems')}
+                    className="w-full mt-6 bg-indigo-600 hover:bg-indigo-500 text-white py-4 rounded-lg font-heading font-black tracking-widest shadow-lg"
+                  >
+                      CONFIRM
+                  </button>
+              </div>
+          </div>
       )}
     </div>
   );

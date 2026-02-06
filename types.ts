@@ -30,11 +30,12 @@ export interface Card {
   is_video: boolean;
   flavor_text?: string;
   description?: string;
+  // RPC Computed Fields (Joined Data)
   is_new?: boolean;
   quantity?: number;
   set_name?: string;
-  is_foil?: boolean; // From backend view
-  foil_quantity?: number; // New field
+  is_foil?: boolean; 
+  foil_quantity?: number; 
   first_acquired?: string;
   hp?: number;
   attack?: number;
@@ -67,8 +68,8 @@ export interface PackType {
   card_count: number;
   guaranteed_rarity: string | null;
   image_url: string;
-  foil_chance?: number; // New
-  has_foil_slot?: boolean; // New
+  foil_chance?: number; 
+  has_foil_slot?: boolean; 
 }
 
 export interface Mission {
@@ -142,7 +143,7 @@ export interface MarketListing {
   seller_username: string;
   card_id: string;
   card: Card;
-  listing_type: 'fixed' | 'auction';
+  listing_type: 'fixed' | 'auction' | 'fixed_price';
   price: number;
   current_bid?: number;
   min_bid_increment?: number;
@@ -165,8 +166,8 @@ export interface LeaderboardEntry {
   rank: number;
   user_id: string;
   username: string;
-  avatar_url?: string; // New
-  banner_url?: string; // New
+  avatar_url?: string; 
+  banner_url?: string; 
   unique_cards?: number;
   total_cards?: number;
   completion_percentage?: number;
@@ -175,15 +176,13 @@ export interface LeaderboardEntry {
   packs_opened?: number;
 }
 
-// --- New Social & Trading Interfaces ---
-
 export interface Friend {
-  id: string; // The friendship ID or user ID depending on context
+  id: string; 
   friend_id: string;
   username: string;
   avatar_url?: string;
   status: 'accepted' | 'pending';
-  is_online?: boolean; // Optional, if we had presence
+  is_online?: boolean; 
 }
 
 export interface PendingRequest {
@@ -200,7 +199,7 @@ export interface TradeOffer {
   sender_username: string;
   receiver_id: string;
   receiver_username: string;
-  sender_cards: Card[]; // Simplified for UI, usually contains card IDs
+  sender_cards: Card[]; 
   sender_gold: number;
   receiver_cards: Card[];
   receiver_gold: number;
@@ -241,6 +240,16 @@ export interface PublicProfile {
     is_following: boolean;
     is_friend: boolean;
     friendship_status?: string;
+    friends: number;
   };
   featured_cards?: Card[];
+}
+
+export interface ChatMessage {
+  id: string;
+  user_id: string;
+  username: string;
+  avatar_url?: string;
+  message: string;
+  created_at: string;
 }

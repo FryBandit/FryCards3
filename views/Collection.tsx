@@ -53,10 +53,15 @@ const Collection: React.FC = () => {
         // Mark "New" cards as seen
         const newCardIds = (data as Card[])?.filter(c => c.is_new).map(c => c.id);
         if (newCardIds && newCardIds.length > 0) {
-          await supabase.rpc('mark_cards_seen', { 
-            p_user_id: user.id, 
-            p_card_ids: newCardIds 
-          });
+          try {
+            // Attempt standard update if RPC fails or is missing
+             await supabase.from('user_cards')
+               .update({ is_new: false })
+               .in('card_id', newCardIds)
+               .eq('user_id', user.id);
+          } catch (e) {
+            console.warn('Failed to mark cards as seen', e);
+          }
         }
       }
     } catch(e: any) {

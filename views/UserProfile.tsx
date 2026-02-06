@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { supabase } from '../supabaseClient';
@@ -16,9 +17,50 @@ const UserProfile: React.FC = () => {
 
   const fetchProfile = async () => {
     setLoading(true);
-    const { data, error } = await supabase.rpc('get_public_profile', { p_target_user_id: user?.id, p_viewer_user_id: user?.id });
-    if (!error && data) setProfile(data);
-    setLoading(false);
+    try {
+        // Fetch raw profile
+        const { data: rawProfile, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user?.id)
+            .single();
+        
+        if (profileError) throw profileError;
+
+        // Fetch social counts RPC
+        const { data: socialCounts, error: socialError } = await supabase.rpc('get_social_counts', { p_user_id: user?.id });
+        
+        // Fetch collection count via RPC (reusing collection stats logic roughly or just simple query)
+        const { count: cardCount } = await supabase.from('user_cards').select('id', { count: 'exact', head: true }).eq('user_id', user?.id);
+
+        if (rawProfile) {
+            setProfile({
+                id: rawProfile.id,
+                username: rawProfile.username,
+                avatar_url: rawProfile.avatar_url,
+                banner_url: rawProfile.banner_url,
+                bio: rawProfile.bio,
+                level: rawProfile.level,
+                created_at: rawProfile.created_at,
+                total_trades: 0, // Not easily available without RPC
+                stats: {
+                    total_cards: cardCount || 0,
+                    unique_cards: 0 // Simplification
+                },
+                social: {
+                    followers: socialCounts?.followers || 0,
+                    following: socialCounts?.following || 0,
+                    is_following: false,
+                    is_friend: false,
+                    friends: socialCounts?.friends || 0
+                }
+            });
+        }
+    } catch (e) {
+        console.error(e);
+    } finally {
+        setLoading(false);
+    }
   };
 
   if (loading) return <div className="text-center py-20 text-slate-500">LOADING PROFILE DATA...</div>;
@@ -88,8 +130,8 @@ const UserProfile: React.FC = () => {
                        <div className="text-[10px] uppercase text-slate-500 font-bold">Following</div>
                    </div>
                    <div>
-                       <div className="text-lg font-black text-white">{profile.social.is_friend ? 'YES' : 'NO'}</div>
-                       <div className="text-[10px] uppercase text-slate-500 font-bold">Friend</div>
+                       <div className="text-lg font-black text-white">{profile.social.friends}</div>
+                       <div className="text-[10px] uppercase text-slate-500 font-bold">Friends</div>
                    </div>
                </div>
            </div>

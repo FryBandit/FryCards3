@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { GameProvider, useGame } from './context/GameContext';
@@ -17,6 +16,7 @@ import Trading from './views/Trading';
 import ItemShop from './views/ItemShop';
 import UserProfile from './views/UserProfile';
 import Toast from './components/Toast';
+import ChatWidget from './components/ChatWidget';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useGame();
@@ -43,6 +43,7 @@ const Layout: React.FC = () => {
        <main className="flex-1 container mx-auto px-4 py-8">
          <RouterRoutes />
        </main>
+       <ChatWidget />
     </div>
   );
 };

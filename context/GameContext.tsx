@@ -60,35 +60,47 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (mountedRef.current) setError(null);
 
     try {
-      const { data, error: rpcError } = await supabase.rpc('get_user_dashboard', {
-        p_user_id: user.id,
-      });
-      
-      if (!rpcError && data && data.stats) {
-        if (mountedRef.current) setDashboard(data);
-        return;
-      }
-
-      // Attempt to fetch profile directly if dashboard RPC fails
-      const { data: profile } = await supabase
+      // Fetch Profile
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single();
 
-      if (profile) {
-         // If profile exists but RPC failed, construct minimal dashboard
-         const fallback: DashboardData = {
-          profile: profile as any,
-          stats: { total_cards: 0, unique_cards: 0, total_possible: 0, completion_percentage: 0, rarity_breakdown: [], set_completion: [] },
-          missions: [],
-          can_claim_daily: false
-        };
-        if (mountedRef.current) setDashboard(fallback);
-      } else {
-        // Only throw if we really can't find a profile (User needs to sign up/db trigger failed)
-        if (rpcError) throw rpcError;
-      }
+      if (profileError) throw profileError;
+
+      // Fetch Collection Stats via RPC
+      const { data: stats, error: statsError } = await supabase.rpc('get_collection_stats', {
+        p_user_id: user.id
+      });
+
+      if (statsError) console.warn("Failed to fetch stats", statsError);
+
+      // Fetch Missions (Raw Select)
+      // Check if we need to generate them first
+      await supabase.rpc('check_and_create_daily_missions'); // Trigger logic if needed, though usually handled by DB triggers
+
+      const { data: missions, error: missionsError } = await supabase
+        .from('daily_missions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('created_at', new Date().toISOString().split('T')[0]);
+
+      const dashboardData: DashboardData = {
+        profile: profile as any,
+        stats: stats || {
+          total_cards: 0,
+          unique_cards: 0,
+          total_possible: 0,
+          completion_percentage: 0,
+          rarity_breakdown: [],
+          set_completion: []
+        },
+        missions: missions || [],
+        can_claim_daily: profile.last_daily_claim !== new Date().toISOString().split('T')[0]
+      };
+
+      if (mountedRef.current) setDashboard(dashboardData);
 
     } catch (err: any) {
       console.error('Dashboard Error:', err);

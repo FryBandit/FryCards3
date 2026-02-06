@@ -23,7 +23,7 @@ const Decks: React.FC = () => {
       setLoading(true);
       try {
         const [collRes, deckRes] = await Promise.all([
-          supabase.rpc('get_user_collection', { p_user_id: user.id, p_limit: 100, p_offset: 0 }),
+          supabase.rpc('get_user_collection', { p_user_id: user.id, p_limit: 1000, p_offset: 0 }),
           supabase.from('decks').select('*').eq('user_id', user.id)
         ]);
         
@@ -52,21 +52,45 @@ const Decks: React.FC = () => {
     setActiveDeck(newDeck);
   };
 
+  const handleDeleteDeck = async (deckId: string) => {
+    if (!user) return;
+    if (!confirm('Are you sure you want to delete this deck?')) return;
+
+    try {
+        const { error } = await supabase.rpc('delete_deck', {
+            p_user_id: user.id,
+            p_deck_id: deckId
+        });
+
+        if (error) throw error;
+        setDecks(prev => prev.filter(d => d.id !== deckId));
+        showToast('Deck deleted', 'success');
+    } catch (e: any) {
+        showToast(e.message, 'error');
+    }
+  };
+
   const handleSaveDeck = async () => {
+    if (!user) return;
     if (activeDeck.length < DECK_SIZE) {
       showToast('Deck must have exactly 5 cards.', 'error');
       return;
     }
     
     try {
-      const { error } = await supabase.from('decks').insert([{
-        user_id: user?.id,
-        name: deckName,
-        card_ids: activeDeck.map(c => c.id)
-      }]);
+      const { data, error } = await supabase.rpc('create_deck', {
+        p_user_id: user.id,
+        p_name: deckName,
+        p_card_ids: activeDeck.map(c => c.id)
+      });
       
       if (error) throw error;
       showToast('Deck saved successfully!', 'success');
+      
+      // Refresh decks list
+      const { data: newDecks } = await supabase.from('decks').select('*').eq('user_id', user.id);
+      if (newDecks) setDecks(newDecks);
+      
       setActiveDeck([]);
       setDeckName('UNNAMED SQUAD');
     } catch (e: any) {
@@ -138,6 +162,20 @@ const Decks: React.FC = () => {
             >
               <Save size={16} /> SAVE SQUAD
             </button>
+          </div>
+          
+          {/* Existing Decks List */}
+          <div className="glass p-6 rounded-sm border border-slate-800">
+             <h3 className="font-heading text-xs text-white mb-4">EXISTING SQUADS</h3>
+             <div className="space-y-2">
+                {decks.map(deck => (
+                    <div key={deck.id} className="flex justify-between items-center p-3 bg-slate-950/50 border border-slate-800 rounded-sm">
+                        <span className="font-bold text-slate-300 text-xs">{deck.name}</span>
+                        <button onClick={() => handleDeleteDeck(deck.id)} className="text-slate-600 hover:text-red-500"><Trash2 size={14}/></button>
+                    </div>
+                ))}
+                {decks.length === 0 && <p className="text-slate-500 text-xs italic">No decks saved.</p>}
+             </div>
           </div>
         </div>
 

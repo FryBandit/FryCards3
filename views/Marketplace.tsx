@@ -4,26 +4,26 @@ import { supabase } from '../supabaseClient';
 import { useGame } from '../context/GameContext';
 import { MarketListing, Card } from '../types';
 import CardDisplay from '../components/CardDisplay';
-import { Search, Filter, Gavel, Plus, X, ChevronLeft, ChevronRight, Activity } from 'lucide-react';
+import { Search, Filter, Gavel, Plus, X, ChevronLeft, ChevronRight, Activity, Trash2, Coins, Diamond } from 'lucide-react';
 import { RARITY_COLORS } from '../constants';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const Marketplace: React.FC = () => {
-  const { user, refreshDashboard, showToast } = useGame();
+  const { user, refreshDashboard, showToast, dashboard } = useGame();
   const [listings, setListings] = useState<MarketListing[]>([]);
   const [loading, setLoading] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'fixed' | 'auction'>('all');
   const [filterRarity, setFilterRarity] = useState<string>('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   
+  // Bidding State
+  const [bidModalListing, setBidModalListing] = useState<MarketListing | null>(null);
+  const [bidAmount, setBidAmount] = useState<number>(0);
+  const [processingBid, setProcessingBid] = useState(false);
+  
   // Pagination
   const [page, setPage] = useState(0);
   const LIMIT = 12;
-
-  // Bid Modal
-  const [selectedListing, setSelectedListing] = useState<MarketListing | null>(null);
-  const [bidAmount, setBidAmount] = useState<number>(0);
-  const [processingBid, setProcessingBid] = useState(false);
 
   const mountedRef = useRef(true);
 
@@ -74,7 +74,6 @@ const Marketplace: React.FC = () => {
         schema: 'public', 
         table: 'market_listings' 
       }, () => {
-        // Simple refresh on any change - more efficient than manual diffing for small lists
         fetchListings();
       })
       .subscribe();
@@ -115,16 +114,28 @@ const Marketplace: React.FC = () => {
     }
 
     try {
-      const { error } = await supabase.rpc(
-        listingType === 'fixed' ? 'create_market_listing' : 'create_auction_listing', 
-        {
-          p_user_id: user.id,
+      let error;
+      if (listingType === 'fixed') {
+        const res = await supabase.rpc('create_market_listing', {
           p_card_id: selectedCardId,
-          p_price: price,
-          p_currency: currency,
-          p_duration_hours: duration
-        }
-      );
+          p_listing_type: 'fixed_price',
+          p_price_gold: currency === 'gold' ? price : null,
+          p_price_gems: currency === 'gems' ? price : null,
+          p_quantity: 1,
+          p_expires_hours: duration
+        });
+        error = res.error;
+      } else {
+        // Auction
+        const res = await supabase.rpc('create_auction_listing', {
+            p_card_id: selectedCardId,
+            p_starting_bid_gold: currency === 'gold' ? price : null,
+            p_starting_bid_gems: currency === 'gems' ? price : null,
+            p_quantity: 1,
+            p_expires_hours: duration
+        });
+        error = res.error;
+      }
 
       if (error) throw error;
       
@@ -162,36 +173,67 @@ const Marketplace: React.FC = () => {
   };
 
   const openBidModal = (listing: MarketListing) => {
-     if (listing.seller_id === user?.id) {
-       showToast("Cannot bid on own auction", 'error');
-       return;
-     }
-     const minBid = (listing.current_bid || 0) + (listing.min_bid_increment || 10);
-     setBidAmount(minBid);
-     setSelectedListing(listing);
+    if (!user || listing.seller_id === user.id) {
+      showToast("Cannot bid on own listing.", 'error');
+      return;
+    }
+    setBidModalListing(listing);
+    // Set default bid to min increment or next logical step
+    const currentPrice = listing.current_bid || listing.price || 0;
+    const minIncrement = listing.min_bid_increment || Math.ceil(currentPrice * 0.05) || 1;
+    setBidAmount(currentPrice + minIncrement);
   };
 
-  const submitBid = async () => {
-    if (!user || !selectedListing) return;
-    setProcessingBid(true);
+  const handlePlaceBid = async () => {
+    if (!bidModalListing || !user) return;
+    
+    // Validation
+    const currentPrice = bidModalListing.current_bid || 0;
+    if (bidAmount <= currentPrice) {
+      showToast(`Bid must be higher than ${currentPrice}`, 'error');
+      return;
+    }
 
+    // Check Balance
+    const balance = bidModalListing.currency === 'gold' 
+      ? dashboard?.profile.gold_balance 
+      : dashboard?.profile.gem_balance;
+    
+    if ((balance || 0) < bidAmount) {
+      showToast(`Insufficient ${bidModalListing.currency}`, 'error');
+      return;
+    }
+
+    setProcessingBid(true);
     try {
       const { error } = await supabase.rpc('place_bid', {
-        p_listing_id: selectedListing.id,
-        p_bid_gold: selectedListing.currency === 'gold' ? bidAmount : 0,
-        p_bid_gems: selectedListing.currency === 'gems' ? bidAmount : 0
+        p_listing_id: bidModalListing.id,
+        p_bid_amount: bidAmount
       });
 
       if (error) throw error;
-      
+
       showToast('Bid placed successfully!', 'success');
-      setSelectedListing(null);
+      setBidModalListing(null);
       fetchListings();
       refreshDashboard();
     } catch (err: any) {
-      showToast(err.message, 'error');
+      showToast(err.message || 'Failed to place bid', 'error');
     } finally {
       setProcessingBid(false);
+    }
+  };
+
+  const handleCancel = async (listingId: string) => {
+    if (!window.confirm("Cancel this listing?")) return;
+    try {
+        const { error } = await supabase.rpc('cancel_listing', { p_listing_id: listingId });
+        if (error) throw error;
+        showToast('Listing cancelled', 'success');
+        fetchListings();
+        refreshDashboard();
+    } catch (e: any) {
+        showToast(e.message, 'error');
     }
   };
 
@@ -316,24 +358,33 @@ const Marketplace: React.FC = () => {
                    <div className="bg-slate-950 rounded-sm p-3 border border-slate-800 flex justify-between items-center">
                       <div>
                         <div className="text-[10px] font-bold text-slate-500 uppercase font-mono">
-                          {listing.listing_type === 'fixed' ? 'Price' : 'Current Bid'}
+                          {listing.listing_type === 'fixed' || listing.listing_type === 'fixed_price' ? 'Price' : 'Highest Bid'}
                         </div>
                         <div className={`text-xl font-heading font-black ${listing.currency === 'gold' ? 'text-yellow-400' : 'text-cyan-400'}`}>
-                           {listing.listing_type === 'fixed' ? listing.price : listing.current_bid}
+                           {listing.listing_type === 'fixed' || listing.listing_type === 'fixed_price' ? listing.price : (listing.current_bid || listing.price)}
                            <span className="text-[10px] ml-1 text-slate-500 align-middle">{listing.currency === 'gold' ? 'GOLD' : 'GEMS'}</span>
                         </div>
                       </div>
-                      <button 
-                        onClick={() => listing.listing_type === 'fixed' ? handleBuy(listing) : openBidModal(listing)}
-                        disabled={listing.seller_id === user?.id}
-                        className={`px-4 py-2 rounded-sm font-bold text-xs font-heading transition-all shadow-[2px_2px_0_rgba(0,0,0,0.5)] active:translate-y-1 active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed
-                          ${listing.listing_type === 'fixed' 
-                            ? 'bg-green-600 hover:bg-green-500 text-white' 
-                            : 'bg-amber-600 hover:bg-amber-500 text-white'}
-                        `}
-                      >
-                        {listing.listing_type === 'fixed' ? 'BUY' : 'BID'}
-                      </button>
+                      
+                      {listing.seller_id === user?.id ? (
+                          <button 
+                            onClick={() => handleCancel(listing.id)}
+                            className="px-3 py-2 rounded-sm bg-red-900/20 text-red-500 border border-red-500/30 hover:bg-red-500 hover:text-white transition-all"
+                          >
+                             <Trash2 size={16} />
+                          </button>
+                      ) : (
+                          <button 
+                            onClick={() => listing.listing_type === 'fixed' || listing.listing_type === 'fixed_price' ? handleBuy(listing) : openBidModal(listing)}
+                            className={`px-4 py-2 rounded-sm font-bold text-xs font-heading transition-all shadow-[2px_2px_0_rgba(0,0,0,0.5)] active:translate-y-1 active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed
+                              ${(listing.listing_type === 'fixed' || listing.listing_type === 'fixed_price') 
+                                ? 'bg-green-600 hover:bg-green-500 text-white' 
+                                : 'bg-amber-600 hover:bg-amber-500 text-white'}
+                            `}
+                          >
+                            {(listing.listing_type === 'fixed' || listing.listing_type === 'fixed_price') ? 'BUY' : 'BID'}
+                          </button>
+                      )}
                    </div>
                 </div>
               </motion.div>
@@ -350,38 +401,56 @@ const Marketplace: React.FC = () => {
       )}
 
       {/* Bid Modal */}
-      {selectedListing && (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setSelectedListing(null)}>
-          <div className="bg-slate-900 p-8 rounded-[2rem] border border-amber-500/30 max-w-md w-full shadow-2xl relative" onClick={e => e.stopPropagation()}>
-             <h3 className="text-2xl font-heading font-black text-white mb-2">PLACE BID</h3>
-             <p className="text-slate-400 text-sm mb-6 font-mono">Enter your offer for <span className="text-white font-bold">{selectedListing.card.name}</span></p>
+      {bidModalListing && (
+         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+           <div className="bg-slate-900 rounded-[2rem] p-8 max-w-md w-full border border-slate-700 relative shadow-2xl">
+              <button onClick={() => setBidModalListing(null)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X size={20} /></button>
+              
+              <h3 className="text-xl font-heading font-black text-white mb-6 flex items-center gap-2">
+                 <Gavel className="text-amber-500" /> PLACE BID
+              </h3>
 
-             <div className="bg-slate-950 p-4 rounded-sm border border-slate-800 mb-6 flex justify-between items-center">
-                <div className="text-xs font-bold text-slate-500 uppercase font-mono">Current Highest</div>
-                <div className="text-xl font-heading font-bold text-amber-400">{selectedListing.current_bid || selectedListing.price} {selectedListing.currency}</div>
-             </div>
+              <div className="flex justify-center mb-6">
+                 <CardDisplay card={bidModalListing.card} size="sm" />
+              </div>
 
-             <label className="text-xs font-bold text-slate-500 uppercase mb-2 block font-mono">Your Bid Amount</label>
-             <div className="flex gap-2 mb-6">
-                <input 
-                  type="number" 
-                  value={bidAmount}
-                  onChange={(e) => setBidAmount(parseInt(e.target.value) || 0)}
-                  className="flex-1 bg-slate-800 border border-slate-700 rounded-sm px-4 py-3 text-white font-mono text-lg focus:border-amber-500 outline-none"
-                />
-                <button onClick={() => setBidAmount(b => b + 10)} className="px-3 bg-slate-800 hover:bg-slate-700 rounded-sm border border-slate-700 font-bold font-mono">+10</button>
-                <button onClick={() => setBidAmount(b => b + 50)} className="px-3 bg-slate-800 hover:bg-slate-700 rounded-sm border border-slate-700 font-bold font-mono">+50</button>
-             </div>
+              <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 mb-6">
+                 <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs text-slate-500 font-bold uppercase">Current Bid</span>
+                    <span className="text-white font-bold font-mono">{(bidModalListing.current_bid || bidModalListing.price) || 0} {bidModalListing.currency}</span>
+                 </div>
+                 <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-500 font-bold uppercase">Your Balance</span>
+                    <span className={`text-white font-bold font-mono ${((bidModalListing.currency === 'gold' ? dashboard?.profile.gold_balance : dashboard?.profile.gem_balance) || 0) < bidAmount ? 'text-red-500' : ''}`}>
+                      {(bidModalListing.currency === 'gold' ? dashboard?.profile.gold_balance : dashboard?.profile.gem_balance) || 0}
+                    </span>
+                 </div>
+              </div>
 
-             <button 
-               onClick={submitBid}
-               disabled={processingBid || bidAmount < ((selectedListing.current_bid || 0) + (selectedListing.min_bid_increment || 1))}
-               className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white py-4 rounded-sm font-heading font-black tracking-wider shadow-lg"
-             >
-               {processingBid ? 'PROCESSING...' : 'CONFIRM BID'}
-             </button>
-          </div>
-        </div>
+              <div className="mb-6">
+                 <label className="text-xs font-bold text-slate-500 uppercase mb-2 block font-mono">Bid Amount</label>
+                 <div className="relative">
+                   <input 
+                      type="number"
+                      value={bidAmount}
+                      onChange={e => setBidAmount(Number(e.target.value))}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg py-3 pl-10 pr-4 text-white font-mono focus:border-indigo-500 outline-none"
+                   />
+                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+                      {bidModalListing.currency === 'gold' ? <Coins size={16} /> : <Diamond size={16} />}
+                   </div>
+                 </div>
+              </div>
+
+              <button 
+                onClick={handlePlaceBid}
+                disabled={processingBid}
+                className="w-full bg-amber-600 hover:bg-amber-500 text-white py-4 rounded-sm font-heading font-black tracking-wider shadow-lg transition-all disabled:opacity-50"
+              >
+                 {processingBid ? 'PROCESSING...' : 'CONFIRM BID'}
+              </button>
+           </div>
+         </div>
       )}
 
       {/* Create Modal */}
