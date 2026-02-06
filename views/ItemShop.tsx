@@ -67,49 +67,28 @@ const ItemShop: React.FC = () => {
   const handlePurchase = async () => {
     if (!selectedItem || !user || !dashboard?.profile) return;
 
-    // 1. Client-side Balance Validation
-    const cost = payWith === 'gold' ? selectedItem.cost_gold : selectedItem.cost_gems;
-    const balance = payWith === 'gold' ? dashboard.profile.gold_balance : dashboard.profile.gem_balance;
-
-    if (cost === null || cost === undefined) {
-      showToast('Invalid currency selection for this item.', 'error');
-      return;
-    }
-
-    if (balance < cost) {
-      showToast(`Insufficient ${payWith.toUpperCase()} funds.`, 'error');
-      return;
-    }
-
     setProcessing(true);
 
     try {
-      let error;
-      
-      // 2. Specific RPC Routing
-      if (selectedItem.type === 'card_back') {
-        const res = await supabase.rpc('purchase_card_back', {
-          p_user_id: user.id,
+      // Call unified purchase RPC
+      // Passing p_currency to specify payment method, though generic p_quantity is used
+      const { data, error } = await supabase.rpc('purchase_item', { 
           p_item_id: selectedItem.id,
-          p_pay_with: payWith
-        });
-        error = res.error;
-      } else {
-        const res = await supabase.rpc('buy_shop_item', { 
-          p_user_id: user.id, 
-          p_item_id: selectedItem.id 
-        });
-        error = res.error;
-      }
+          p_quantity: 1,
+          p_currency: payWith
+      });
 
       if (error) throw error;
 
       showToast(`${selectedItem.name} acquired successfully!`, 'success');
+      
+      // Update dashboard to reflect new balance returned by RPC (or fetched via refresh)
       await Promise.all([fetchItems(), refreshDashboard()]);
       setSelectedItem(null);
 
     } catch (e: any) {
       console.error('Purchase error:', e);
+      // Present precise message from backend or fallback
       showToast(e.message || 'Transaction failed.', 'error');
     } finally {
       setProcessing(false);
@@ -299,11 +278,7 @@ const ItemShop: React.FC = () => {
                       <span className="text-xs text-slate-500 font-bold uppercase">Current Balance</span>
                       <div className="flex items-center gap-2">
                          {payWith === 'gold' ? <Coins size={14} className="text-yellow-500"/> : <Diamond size={14} className="text-cyan-500"/>}
-                         <span className={`font-mono font-bold ${
-                           (payWith === 'gold' ? (dashboard?.profile?.gold_balance || 0) : (dashboard?.profile?.gem_balance || 0)) < ((payWith === 'gold' ? selectedItem.cost_gold : selectedItem.cost_gems) || 0)
-                             ? 'text-red-500' 
-                             : 'text-white'
-                         }`}>
+                         <span className="font-mono font-bold text-white">
                            {(payWith === 'gold' ? dashboard?.profile?.gold_balance : dashboard?.profile?.gem_balance)?.toLocaleString()}
                          </span>
                       </div>

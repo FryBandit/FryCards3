@@ -76,15 +76,26 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (statsError) console.warn("Failed to fetch stats", statsError);
 
-      // Fetch Missions (Raw Select)
-      // Check if we need to generate them first
-      await supabase.rpc('check_and_create_daily_missions'); // Trigger logic if needed, though usually handled by DB triggers
-
-      const { data: missions, error: missionsError } = await supabase
-        .from('daily_missions')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('created_at', new Date().toISOString().split('T')[0]);
+      // Fetch Missions via robust RPC
+      // This ensures missions are created for the day if they don't exist
+      const { data: missions, error: missionsError } = await supabase.rpc('ensure_and_get_daily_missions', {
+        p_user_id: user.id
+      });
+      
+      let finalMissions = missions;
+      
+      // Fallback in case the new RPC isn't deployed yet (backward compatibility)
+      if (missionsError) {
+        console.warn('RPC ensure_and_get_daily_missions failed, using fallback', missionsError);
+        await supabase.rpc('check_and_create_daily_missions');
+        
+        const { data: fallbackMissions } = await supabase
+            .from('daily_missions')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('created_at', new Date().toISOString().split('T')[0]);
+        finalMissions = fallbackMissions;
+      }
 
       const dashboardData: DashboardData = {
         profile: profile as any,
@@ -96,7 +107,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           rarity_breakdown: [],
           set_completion: []
         },
-        missions: missions || [],
+        missions: finalMissions || [],
         can_claim_daily: profile.last_daily_claim !== new Date().toISOString().split('T')[0]
       };
 

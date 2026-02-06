@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 import { useGame } from '../context/GameContext';
 import { MarketListing, Card } from '../types';
 import CardDisplay from '../components/CardDisplay';
-import { Search, Filter, Gavel, Plus, X, ChevronLeft, ChevronRight, Activity, Trash2, Coins, Diamond } from 'lucide-react';
+import { Search, Filter, Gavel, Plus, X, ChevronLeft, ChevronRight, Activity, Trash2, Coins, Diamond, RefreshCw, ArrowUpDown } from 'lucide-react';
 import { RARITY_COLORS } from '../constants';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -14,6 +14,7 @@ const Marketplace: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'fixed' | 'auction'>('all');
   const [filterRarity, setFilterRarity] = useState<string>('');
+  const [sortOption, setSortOption] = useState<string>('newest');
   const [showCreateModal, setShowCreateModal] = useState(false);
   
   // Bidding State
@@ -43,9 +44,21 @@ const Marketplace: React.FC = () => {
   const fetchListings = useCallback(async () => {
     setLoading(true);
     try {
+      let sortBy = 'created_at';
+      let sortDir = 'desc';
+      
+      switch(sortOption) {
+          case 'price_asc': sortBy = 'price'; sortDir = 'asc'; break;
+          case 'price_desc': sortBy = 'price'; sortDir = 'desc'; break;
+          case 'expiring': sortBy = 'expires_at'; sortDir = 'asc'; break;
+          default: sortBy = 'created_at'; sortDir = 'desc';
+      }
+
       const { data, error } = await supabase.rpc('get_market_listings', {
         p_filter_type: filterType === 'all' ? null : filterType,
         p_rarity: filterRarity || null,
+        p_sort_by: sortBy,
+        p_sort_dir: sortDir,
         p_limit: LIMIT,
         p_offset: page * LIMIT
       });
@@ -61,7 +74,7 @@ const Marketplace: React.FC = () => {
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [filterType, filterRarity, page, showToast]);
+  }, [filterType, filterRarity, sortOption, page, showToast]);
 
   useEffect(() => {
     fetchListings();
@@ -237,6 +250,13 @@ const Marketplace: React.FC = () => {
     }
   };
 
+  const clearFilters = () => {
+      setFilterType('all');
+      setFilterRarity('');
+      setSortOption('newest');
+      setPage(0);
+  };
+
   return (
     <div className="pb-20">
       <div className="flex flex-col md:flex-row justify-between items-end gap-6 mb-8 border-b border-slate-800 pb-8">
@@ -291,6 +311,20 @@ const Marketplace: React.FC = () => {
             >
               <option value="">ALL RARITIES</option>
               {Object.keys(RARITY_COLORS).map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-sm px-4 py-2">
+            <ArrowUpDown size={16} className="text-slate-500" />
+            <select 
+              value={sortOption} 
+              onChange={(e) => { setSortOption(e.target.value); setPage(0); }}
+              className="bg-transparent text-slate-300 text-xs font-mono font-bold focus:outline-none uppercase"
+            >
+              <option value="newest">Newest Listed</option>
+              <option value="price_asc">Price: Low to High</option>
+              <option value="price_desc">Price: High to Low</option>
+              <option value="expiring">Ending Soon</option>
             </select>
           </div>
         </div>
@@ -377,7 +411,7 @@ const Marketplace: React.FC = () => {
                           <button 
                             onClick={() => listing.listing_type === 'fixed' || listing.listing_type === 'fixed_price' ? handleBuy(listing) : openBidModal(listing)}
                             className={`px-4 py-2 rounded-sm font-bold text-xs font-heading transition-all shadow-[2px_2px_0_rgba(0,0,0,0.5)] active:translate-y-1 active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed
-                              ${(listing.listing_type === 'fixed' || listing.listing_type === 'fixed_price') 
+                              {(listing.listing_type === 'fixed' || listing.listing_type === 'fixed_price') 
                                 ? 'bg-green-600 hover:bg-green-500 text-white' 
                                 : 'bg-amber-600 hover:bg-amber-500 text-white'}
                             `}
@@ -394,9 +428,16 @@ const Marketplace: React.FC = () => {
       )}
       
       {!loading && listings.length === 0 && (
-         <div className="text-center py-20 text-slate-500">
+         <div className="text-center py-20 text-slate-500 border-2 border-dashed border-slate-800 rounded-2xl bg-slate-900/30">
             <Search size={48} className="mx-auto mb-4 opacity-20" />
-            <p className="font-heading font-bold">NO LISTINGS FOUND</p>
+            <h3 className="font-heading font-bold text-lg mb-2">NO LISTINGS FOUND</h3>
+            <p className="text-xs font-mono mb-6">Current search parameters yielded no results in the global database.</p>
+            <button 
+                onClick={clearFilters}
+                className="bg-slate-800 text-white px-6 py-2 rounded-sm font-bold text-xs hover:bg-indigo-600 transition-colors flex items-center gap-2 mx-auto"
+            >
+                <RefreshCw size={14} /> RESET FILTERS
+            </button>
          </div>
       )}
 

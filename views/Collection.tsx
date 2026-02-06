@@ -4,8 +4,9 @@ import { supabase } from '../supabaseClient';
 import { useGame } from '../context/GameContext';
 import { Card } from '../types';
 import CardDisplay from '../components/CardDisplay';
-import { Filter, Trash2, ChevronLeft, ChevronRight, Search, SortAsc, Info, AlertCircle, RefreshCw, Sparkles, Coins } from 'lucide-react';
+import { Filter, Trash2, ChevronLeft, ChevronRight, Search, SortAsc, Info, AlertCircle, RefreshCw, Sparkles, Coins, ShoppingBag } from 'lucide-react';
 import { RARITY_COLORS } from '../constants';
+import { Link } from 'react-router-dom';
 
 const Collection: React.FC = () => {
   const { user, refreshDashboard, showToast } = useGame();
@@ -50,15 +51,11 @@ const Collection: React.FC = () => {
       if (mountedRef.current) {
         setCards(data || []);
         
-        // Mark "New" cards as seen
+        // Mark "New" cards as seen using RPC
         const newCardIds = (data as Card[])?.filter(c => c.is_new).map(c => c.id);
         if (newCardIds && newCardIds.length > 0) {
           try {
-            // Attempt standard update if RPC fails or is missing
-             await supabase.from('user_cards')
-               .update({ is_new: false })
-               .in('card_id', newCardIds)
-               .eq('user_id', user.id);
+             await supabase.rpc('mark_cards_seen', { p_card_ids: newCardIds });
           } catch (e) {
             console.warn('Failed to mark cards as seen', e);
           }
@@ -328,10 +325,13 @@ const Collection: React.FC = () => {
                </div>
             </div>
           )) : (
-            <div className="col-span-full py-32 text-slate-500 flex flex-col items-center">
+            <div className="col-span-full py-32 text-slate-500 flex flex-col items-center border-2 border-dashed border-slate-800 rounded-2xl bg-slate-900/30 w-full">
               <Search size={80} className="mb-8 opacity-10" />
               <h3 className="font-heading text-2xl text-slate-700 mb-2 font-black">NO ASSETS FOUND</h3>
-              <p className="text-sm font-medium text-slate-600 font-mono">Sync complete. Sector is empty.</p>
+              <p className="text-sm font-medium text-slate-600 font-mono mb-8">Sync complete. Sector is empty.</p>
+              <Link to="/shop" className="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-4 rounded-sm font-heading font-black text-xs tracking-widest flex items-center gap-2 shadow-lg hover:shadow-indigo-500/20 transition-all">
+                  <ShoppingBag size={16} /> ACQUIRE ASSETS
+              </Link>
             </div>
           )}
         </div>

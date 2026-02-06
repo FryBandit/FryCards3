@@ -1,19 +1,35 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { supabase } from '../supabaseClient';
 import { PublicProfile } from '../types';
-import { User, MapPin, Calendar, Activity, Layers, Edit } from 'lucide-react';
+import { User, MapPin, Calendar, Activity, Layers, Edit, X, Save } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const UserProfile: React.FC = () => {
-  const { user } = useGame();
+  const { user, showToast } = useGame();
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Edit Modal State
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({ username: '', bio: '', avatar_url: '', banner_url: '' });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (user) fetchProfile();
   }, [user]);
+
+  useEffect(() => {
+      if (profile) {
+          setEditForm({
+              username: profile.username || '',
+              bio: profile.bio || '',
+              avatar_url: profile.avatar_url || '',
+              banner_url: profile.banner_url || ''
+          });
+      }
+  }, [profile]);
 
   const fetchProfile = async () => {
     setLoading(true);
@@ -30,7 +46,7 @@ const UserProfile: React.FC = () => {
         // Fetch social counts RPC
         const { data: socialCounts, error: socialError } = await supabase.rpc('get_social_counts', { p_user_id: user?.id });
         
-        // Fetch collection count via RPC (reusing collection stats logic roughly or just simple query)
+        // Fetch collection count via RPC
         const { count: cardCount } = await supabase.from('user_cards').select('id', { count: 'exact', head: true }).eq('user_id', user?.id);
 
         if (rawProfile) {
@@ -42,10 +58,10 @@ const UserProfile: React.FC = () => {
                 bio: rawProfile.bio,
                 level: rawProfile.level,
                 created_at: rawProfile.created_at,
-                total_trades: 0, // Not easily available without RPC
+                total_trades: 0,
                 stats: {
                     total_cards: cardCount || 0,
-                    unique_cards: 0 // Simplification
+                    unique_cards: 0 
                 },
                 social: {
                     followers: socialCounts?.followers || 0,
@@ -63,11 +79,35 @@ const UserProfile: React.FC = () => {
     }
   };
 
+  const handleUpdateProfile = async () => {
+      if (!user) return;
+      setSaving(true);
+      try {
+          const { error } = await supabase.rpc('update_user_profile', {
+              p_username: editForm.username,
+              p_bio: editForm.bio,
+              p_avatar_url: editForm.avatar_url,
+              p_banner_url: editForm.banner_url
+          });
+
+          if (error) throw error;
+          
+          showToast("Profile updated successfully", "success");
+          setIsEditing(false);
+          fetchProfile();
+
+      } catch (e: any) {
+          showToast(e.message, 'error');
+      } finally {
+          setSaving(false);
+      }
+  };
+
   if (loading) return <div className="text-center py-20 text-slate-500">LOADING PROFILE DATA...</div>;
   if (!profile) return <div className="text-center py-20 text-slate-500">PROFILE NOT FOUND</div>;
 
   return (
-    <div className="max-w-4xl mx-auto pb-20">
+    <div className="max-w-4xl mx-auto pb-20 relative">
        <div className="relative mb-20">
            {/* Banner */}
            <div className="h-64 w-full bg-slate-800 rounded-b-[3rem] overflow-hidden border-b border-slate-700 relative">
@@ -96,7 +136,12 @@ const UserProfile: React.FC = () => {
                    </div>
                </div>
                <div className="mb-4 flex gap-3">
-                    <button className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2"><Edit size={14}/> Edit Profile</button>
+                    <button 
+                        onClick={() => setIsEditing(true)}
+                        className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2"
+                    >
+                        <Edit size={14}/> Edit Profile
+                    </button>
                </div>
            </div>
        </div>
@@ -144,6 +189,77 @@ const UserProfile: React.FC = () => {
                 </div>
            </div>
        </div>
+
+       {/* Edit Modal */}
+       <AnimatePresence>
+           {isEditing && (
+               <motion.div 
+                    initial={{ opacity: 0 }} 
+                    animate={{ opacity: 1 }} 
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+               >
+                   <motion.div 
+                        initial={{ scale: 0.9, y: 20 }}
+                        animate={{ scale: 1, y: 0 }}
+                        exit={{ scale: 0.9, y: 20 }}
+                        className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden"
+                   >
+                       <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+                           <h3 className="font-heading font-bold text-white">EDIT IDENTITY</h3>
+                           <button onClick={() => setIsEditing(false)} className="text-slate-500 hover:text-white"><X size={20}/></button>
+                       </div>
+                       
+                       <div className="p-8 space-y-4">
+                           <div>
+                               <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Username</label>
+                               <input 
+                                   type="text" 
+                                   value={editForm.username}
+                                   onChange={e => setEditForm({...editForm, username: e.target.value})}
+                                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white focus:border-indigo-500 outline-none font-mono"
+                               />
+                           </div>
+                           <div>
+                               <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Bio</label>
+                               <textarea 
+                                   value={editForm.bio}
+                                   onChange={e => setEditForm({...editForm, bio: e.target.value})}
+                                   rows={3}
+                                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white focus:border-indigo-500 outline-none font-mono text-sm"
+                               />
+                           </div>
+                           <div>
+                               <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Avatar URL</label>
+                               <input 
+                                   type="text" 
+                                   value={editForm.avatar_url}
+                                   onChange={e => setEditForm({...editForm, avatar_url: e.target.value})}
+                                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white focus:border-indigo-500 outline-none font-mono text-sm"
+                               />
+                           </div>
+                           <div>
+                               <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Banner URL</label>
+                               <input 
+                                   type="text" 
+                                   value={editForm.banner_url}
+                                   onChange={e => setEditForm({...editForm, banner_url: e.target.value})}
+                                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-white focus:border-indigo-500 outline-none font-mono text-sm"
+                               />
+                           </div>
+
+                           <button 
+                                onClick={handleUpdateProfile}
+                                disabled={saving}
+                                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-4 rounded-lg font-heading font-black tracking-widest mt-4 shadow-lg disabled:opacity-50"
+                           >
+                               {saving ? 'SAVING...' : 'SAVE CHANGES'}
+                           </button>
+                       </div>
+                   </motion.div>
+               </motion.div>
+           )}
+       </AnimatePresence>
     </div>
   );
 };
