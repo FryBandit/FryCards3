@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { GameProvider, useGame } from './context/GameContext';
@@ -13,7 +14,6 @@ import Decks from './views/Decks';
 import BattleArena from './views/BattleArena';
 import Friends from './views/Friends';
 import Trading from './views/Trading';
-import ItemShop from './views/ItemShop';
 import UserProfile from './views/UserProfile';
 import Toast from './components/Toast';
 import ChatWidget from './components/ChatWidget';
@@ -53,7 +53,6 @@ const RouterRoutes: React.FC = () => {
     <Routes>
       <Route path="/" element={<Dashboard />} />
       <Route path="/shop" element={<Shop />} />
-      <Route path="/items" element={<ItemShop />} />
       <Route path="/collection" element={<Collection />} />
       <Route path="/decks" element={<Decks />} />
       <Route path="/battle" element={<BattleArena />} />

@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 import { useGame } from '../context/GameContext';
 import { MarketListing, Card } from '../types';
 import CardDisplay from '../components/CardDisplay';
-import { Search, Filter, Gavel, Plus, X, ChevronLeft, ChevronRight, Activity, Trash2, Coins, Diamond, RefreshCw, ArrowUpDown } from 'lucide-react';
+import { Search, Filter, Gavel, Plus, X, ChevronLeft, ChevronRight, Activity, Trash2, Coins, Diamond, RefreshCw, ArrowUpDown, Tag } from 'lucide-react';
 import { RARITY_COLORS } from '../constants';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -12,7 +12,7 @@ const Marketplace: React.FC = () => {
   const { user, refreshDashboard, showToast, dashboard } = useGame();
   const [listings, setListings] = useState<MarketListing[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filterType, setFilterType] = useState<'all' | 'fixed' | 'auction'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'fixed' | 'auction' | 'mine'>('all');
   const [filterRarity, setFilterRarity] = useState<string>('');
   const [sortOption, setSortOption] = useState<string>('newest');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -54,19 +54,27 @@ const Marketplace: React.FC = () => {
           default: sortBy = 'created_at'; sortDir = 'desc';
       }
 
+      const rpcFilterType = filterType === 'mine' ? 'all' : (filterType === 'all' ? null : filterType);
+
       const { data, error } = await supabase.rpc('get_market_listings', {
-        p_filter_type: filterType === 'all' ? null : filterType,
+        p_filter_type: rpcFilterType,
         p_rarity: filterRarity || null,
         p_sort_by: sortBy,
         p_sort_dir: sortDir,
-        p_limit: LIMIT,
+        p_limit: 100,
         p_offset: page * LIMIT
       });
       
       if (error) throw error;
       
+      let fetchedListings = data || [];
+      
+      if (filterType === 'mine' && user) {
+          fetchedListings = fetchedListings.filter((l: MarketListing) => l.seller_id === user.id);
+      }
+      
       if (mountedRef.current) {
-        setListings(data || []);
+        setListings(fetchedListings);
       }
     } catch (err: any) {
       console.error('Market API error:', err);
@@ -74,7 +82,7 @@ const Marketplace: React.FC = () => {
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [filterType, filterRarity, sortOption, page, showToast]);
+  }, [filterType, filterRarity, sortOption, page, showToast, user]);
 
   useEffect(() => {
     fetchListings();
@@ -300,6 +308,12 @@ const Marketplace: React.FC = () => {
             >
               AUCTIONS
             </button>
+            <button 
+              onClick={() => { setFilterType('mine'); setPage(0); }}
+              className={`px-4 py-2 rounded-sm text-xs font-heading font-bold transition-all ${filterType === 'mine' ? 'bg-green-600 text-white' : 'text-slate-400 hover:text-white'}`}
+            >
+              MY LISTINGS
+            </button>
           </div>
 
           <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-sm px-4 py-2">
@@ -375,10 +389,15 @@ const Marketplace: React.FC = () => {
                        {listing.card.rarity}
                      </span>
                    </div>
-                   {listing.listing_type === 'auction' && (
+                   {listing.listing_type === 'auction' ? (
                      <div className="absolute top-2 left-2 bg-amber-600 text-white px-2 py-1 rounded-sm shadow-lg flex items-center gap-1">
                        <Gavel size={10} />
                        <span className="text-[10px] font-black uppercase">AUCTION</span>
+                     </div>
+                   ) : (
+                     <div className="absolute top-2 left-2 bg-green-600 text-white px-2 py-1 rounded-sm shadow-lg flex items-center gap-1">
+                       <Tag size={10} />
+                       <span className="text-[10px] font-black uppercase">BUY NOW</span>
                      </div>
                    )}
                 </div>
@@ -533,21 +552,26 @@ const Marketplace: React.FC = () => {
                     <div className="flex gap-4">
                        <div className="flex-1">
                           <label className="text-xs font-bold text-slate-500 uppercase mb-2 block font-mono">Amount</label>
-                          <input 
-                            type="number" 
-                            min="1"
-                            max="1000000"
-                            value={price} 
-                            onChange={e => setPrice(Math.max(1, Math.min(1000000, parseInt(e.target.value) || 0)))}
-                            className="w-full bg-slate-950 border border-slate-800 rounded-sm px-4 py-3 text-white font-mono focus:border-indigo-500 outline-none" 
-                          />
+                          <div className="relative">
+                            <input 
+                              type="number" 
+                              min="1"
+                              max="1000000"
+                              value={price} 
+                              onChange={e => setPrice(Math.max(1, Math.min(1000000, parseInt(e.target.value) || 0)))}
+                              className={`w-full bg-slate-950 border-2 rounded-sm px-4 py-3 text-white font-mono focus:outline-none pl-10 ${currency === 'gold' ? 'border-yellow-500/30 focus:border-yellow-500' : 'border-cyan-500/30 focus:border-cyan-500'}`} 
+                            />
+                            <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                                {currency === 'gold' ? <Coins size={16} className="text-yellow-500"/> : <Diamond size={16} className="text-cyan-500"/>}
+                            </div>
+                          </div>
                        </div>
                        <div className="w-1/3">
                           <label className="text-xs font-bold text-slate-500 uppercase mb-2 block font-mono">Currency</label>
                           <select 
                             value={currency} 
                             onChange={e => setCurrency(e.target.value as any)}
-                            className="w-full bg-slate-950 border border-slate-800 rounded-sm px-4 py-3 text-white font-bold outline-none font-mono"
+                            className={`w-full bg-slate-950 border-2 rounded-sm px-4 py-3 text-white font-bold outline-none font-mono ${currency === 'gold' ? 'border-yellow-500/30 text-yellow-500' : 'border-cyan-500/30 text-cyan-500'}`}
                           >
                             <option value="gold">GOLD</option>
                             <option value="gems">GEMS</option>

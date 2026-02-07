@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 import { useGame } from '../context/GameContext';
 import { Card } from '../types';
 import CardDisplay from '../components/CardDisplay';
-import { Filter, Trash2, ChevronLeft, ChevronRight, Search, SortAsc, Info, AlertCircle, RefreshCw, Sparkles, Coins, ShoppingBag } from 'lucide-react';
+import { Filter, Trash2, ChevronLeft, ChevronRight, Search, SortAsc, Info, AlertCircle, RefreshCw, Sparkles, Coins, ShoppingBag, Eye } from 'lucide-react';
 import { RARITY_COLORS } from '../constants';
 import { Link } from 'react-router-dom';
 
@@ -14,6 +14,8 @@ const Collection: React.FC = () => {
   const [page, setPage] = useState(0);
   const [filterRarity, setFilterRarity] = useState<string>('');
   const [sortBy, setSortBy] = useState<string>('rarity');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showFoilsOnly, setShowFoilsOnly] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [millingAll, setMillingAll] = useState(false);
@@ -155,6 +157,13 @@ const Collection: React.FC = () => {
     }
   };
 
+  // Client-side filtering
+  const displayCards = cards.filter(c => {
+      const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesFoil = showFoilsOnly ? (c.foil_quantity || 0) > 0 || c.is_foil : true;
+      return matchesSearch && matchesFoil;
+  });
+
   return (
     <div className="space-y-6 pb-20">
       {/* Detail & Mill Modal */}
@@ -164,7 +173,7 @@ const Collection: React.FC = () => {
             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-500"></div>
             
             <div className="shrink-0 flex justify-center">
-              <CardDisplay card={selectedCard} size="md" />
+              <CardDisplay card={selectedCard} size="md" showFoilEffect={true} />
             </div>
 
             <div className="flex-1 flex flex-col justify-between">
@@ -241,6 +250,18 @@ const Collection: React.FC = () => {
       {/* Controls */}
       <div className="flex flex-col lg:flex-row justify-between items-center gap-4 bg-slate-900/50 p-6 rounded-lg border border-slate-800 backdrop-blur-xl animate-fade-in">
         <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
+          
+          <div className="flex items-center gap-3 bg-slate-950 border border-slate-800 rounded-sm px-4 py-3 min-w-[200px]">
+             <Search size={18} className="text-indigo-400" />
+             <input 
+               type="text"
+               placeholder="SEARCH ASSETS..."
+               value={searchTerm}
+               onChange={(e) => setSearchTerm(e.target.value)}
+               className="bg-transparent text-sm focus:outline-none text-white font-bold placeholder-slate-600 w-full font-mono"
+             />
+          </div>
+
           <div className="flex items-center gap-3 bg-slate-950 border border-slate-800 rounded-sm px-4 py-3">
              <Filter size={18} className="text-indigo-400" />
              <select 
@@ -266,6 +287,14 @@ const Collection: React.FC = () => {
                <option value="newest">Sort by Acquired</option>
              </select>
           </div>
+
+          <button 
+            onClick={() => setShowFoilsOnly(!showFoilsOnly)}
+            className={`flex items-center gap-2 px-4 py-3 rounded-sm font-bold text-xs uppercase tracking-widest transition-all border ${showFoilsOnly ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' : 'bg-slate-950 border-slate-800 text-slate-500 hover:text-white'}`}
+          >
+             <Sparkles size={16} />
+             FOILS ONLY
+          </button>
         </div>
 
         <div className="flex items-center gap-4">
@@ -307,12 +336,13 @@ const Collection: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-y-12 gap-x-8 justify-items-center pt-8">
-          {cards.length > 0 ? cards.map(card => (
+          {displayCards.length > 0 ? displayCards.map(card => (
             <div key={card.id} className="relative group flex flex-col items-center">
                <CardDisplay 
                  card={card} 
                  showQuantity={true}
                  size="md"
+                 showFoilEffect={true}
                  onClick={() => setSelectedCard(card)}
                />
                <div className="mt-4 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 flex gap-2">

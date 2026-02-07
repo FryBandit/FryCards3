@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { supabase } from '../supabaseClient';
@@ -114,9 +115,10 @@ const Trading: React.FC = () => {
   };
 
   const respondTrade = async (tradeId: string, accept: boolean) => {
+      // Backend expects p_action: 'accept' | 'decline'
       const { error } = await supabase.rpc('respond_to_trade_offer', { 
           p_trade_id: tradeId,
-          p_accept: accept 
+          p_action: accept ? 'accept' : 'decline' 
       });
 
       if (error) showToast(error.message, 'error');

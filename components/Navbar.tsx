@@ -1,8 +1,9 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
-import { Home, ShoppingBag, Layers, BarChart2, Menu, X, Coins, Diamond, LogOut, Store, Sword, Layout, Users, Repeat, Shirt, User as UserIcon } from 'lucide-react';
+import { Home, ShoppingBag, Layers, BarChart2, Menu, X, Coins, Diamond, LogOut, Store, Sword, Layout, Users, Repeat, User as UserIcon } from 'lucide-react';
 
 const Navbar: React.FC = () => {
   const { user, dashboard, signOut } = useGame();
@@ -23,8 +24,7 @@ const Navbar: React.FC = () => {
 
   const links = [
     { to: '/', label: 'Base', icon: Home },
-    { to: '/shop', label: 'Pack', icon: ShoppingBag },
-    { to: '/items', label: 'Item', icon: Shirt },
+    { to: '/shop', label: 'Store', icon: ShoppingBag },
     { to: '/collection', label: 'Card', icon: Layers },
     { to: '/decks', label: 'Deck', icon: Layout },
     { to: '/battle', label: 'War', icon: Sword },

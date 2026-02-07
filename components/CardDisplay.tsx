@@ -31,8 +31,8 @@ const CardDisplay: React.FC<CardDisplayProps> = ({
   const y = useMotionValue(0);
 
   // Smoothing springs
-  const mouseXSpring = useSpring(x);
-  const mouseYSpring = useSpring(y);
+  const mouseXSpring = useSpring(x, { stiffness: 300, damping: 30 });
+  const mouseYSpring = useSpring(y, { stiffness: 300, damping: 30 });
 
   // Rotation mapping (-15 to 15 degrees)
   const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], [15, -15]);
@@ -42,6 +42,33 @@ const CardDisplay: React.FC<CardDisplayProps> = ({
   const shimmerX = useTransform(mouseXSpring, [-0.5, 0.5], [0, 100]);
   const shimmerY = useTransform(mouseYSpring, [-0.5, 0.5], [0, 100]);
   const shimmerOpacity = useTransform(mouseXSpring, [-0.5, 0.5], [0.1, 0.6]);
+
+  // Accelerometer / Gyroscope Handler
+  useEffect(() => {
+    const handleOrientation = (e: DeviceOrientationEvent) => {
+      // Gamma: Left/Right tilt (-90 to 90)
+      // Beta: Front/Back tilt (-180 to 180)
+      if (e.gamma !== null && e.beta !== null) {
+        // Normalize gamma to -0.5 to 0.5 range
+        const xVal = Math.min(Math.max(e.gamma, -45), 45) / 90; 
+        // Normalize beta to -0.5 to 0.5 range (assuming holding phone roughly upright)
+        const yVal = Math.min(Math.max(e.beta - 45, -45), 45) / 90;
+        
+        x.set(xVal);
+        y.set(yVal);
+      }
+    };
+
+    if (window.DeviceOrientationEvent && typeof (window.DeviceOrientationEvent as any).requestPermission === 'function') {
+         // Permission handling would go here for iOS 13+
+    } else {
+         window.addEventListener('deviceorientation', handleOrientation);
+    }
+
+    return () => {
+      window.removeEventListener('deviceorientation', handleOrientation);
+    };
+  }, [x, y]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!cardRef.current || !isFlipped) return;

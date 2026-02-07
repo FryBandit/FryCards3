@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { supabase } from '../supabaseClient';
 import { ShopItem } from '../types';
-import { Shirt, Coins, Diamond, Check, Lock, X, ShoppingBag, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Shirt, Coins, Diamond, Check, X, ShoppingBag, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const ItemShop: React.FC = () => {
@@ -29,19 +29,27 @@ const ItemShop: React.FC = () => {
 
         // Fetch user ownership
         const { data: userItems, error: userItemsError } = await supabase.from('user_items').select('*').eq('user_id', user?.id);
-        // Don't throw on userItems error, just assume empty if table doesn't exist yet or other issue
+        
         if (userItemsError) console.warn('Could not fetch user items', userItemsError);
 
         const safeShopItems = shopItems || [];
         const safeUserItems = userItems || [];
 
-        // Merge data
+        // Merge data - CRITICAL: Map the owned user_item instance ID
         const mergedItems: ShopItem[] = safeShopItems.map((item: any) => {
-            const ownedRecord = safeUserItems.find((ui: any) => ui.item_id === item.id);
+            // Check for both common column naming conventions in database
+            const ownedRecord = safeUserItems.find((ui: any) => 
+                (ui.item_id && ui.item_id === item.id) || 
+                (ui.shop_item_id && ui.shop_item_id === item.id)
+            );
+
             return {
                 ...item,
+                type: item.type || 'misc', // Fallback for missing type
+                name: item.name || 'Unknown Item', // Fallback for missing name
                 is_owned: !!ownedRecord,
-                is_equipped: ownedRecord?.is_equipped || false
+                is_equipped: ownedRecord?.is_equipped || false,
+                user_item_id: ownedRecord?.id // Capture the specific instance ID
             };
         });
 
@@ -56,6 +64,12 @@ const ItemShop: React.FC = () => {
   };
 
   const openPurchaseModal = (item: ShopItem) => {
+    if (!dashboard || !dashboard.profile) {
+        showToast("Profile not loaded. Please wait...", "error");
+        refreshDashboard();
+        return;
+    }
+
     // Default payment method logic
     if (item.cost_gold !== null && item.cost_gems === null) setPayWith('gold');
     else if (item.cost_gold === null && item.cost_gems !== null) setPayWith('gems');
@@ -65,13 +79,15 @@ const ItemShop: React.FC = () => {
   };
 
   const handlePurchase = async () => {
-    if (!selectedItem || !user || !dashboard?.profile) return;
+    if (!selectedItem || !user || !dashboard?.profile) {
+         showToast("System syncing. Please wait...", "error");
+         return;
+    }
 
     setProcessing(true);
 
     try {
       // Call unified purchase RPC
-      // Passing p_currency to specify payment method, though generic p_quantity is used
       const { data, error } = await supabase.rpc('purchase_item', { 
           p_item_id: selectedItem.id,
           p_quantity: 1,
@@ -82,13 +98,11 @@ const ItemShop: React.FC = () => {
 
       showToast(`${selectedItem.name} acquired successfully!`, 'success');
       
-      // Update dashboard to reflect new balance returned by RPC (or fetched via refresh)
       await Promise.all([fetchItems(), refreshDashboard()]);
       setSelectedItem(null);
 
     } catch (e: any) {
       console.error('Purchase error:', e);
-      // Present precise message from backend or fallback
       showToast(e.message || 'Transaction failed.', 'error');
     } finally {
       setProcessing(false);
@@ -97,9 +111,18 @@ const ItemShop: React.FC = () => {
 
   const handleEquip = async (item: ShopItem) => {
     if (!user) return;
+    if (!item.user_item_id) {
+        showToast("Error: Item ownership verification failed.", "error");
+        return;
+    }
+
     setProcessing(true);
     try {
-      const { error } = await supabase.rpc('equip_item', { p_user_id: user.id, p_item_id: item.id });
+      // The backend expects the user_item.id (instance ID), not the shop_item.id
+      const { error } = await supabase.rpc('equip_item', { 
+          p_user_id: user.id, 
+          p_user_item_id: item.user_item_id 
+      });
       
       if (error) throw error;
       
@@ -137,6 +160,14 @@ const ItemShop: React.FC = () => {
                           {item.type === 'avatar' && <img src={item.image_url} className="w-24 h-24 rounded-full object-cover border-4 border-slate-800 shadow-xl group-hover:scale-110 transition-transform" alt={item.name} />}
                           {item.type === 'card_back' && <img src={item.image_url} className="h-full object-contain shadow-2xl transform group-hover:scale-105 transition-transform rotate-3" alt={item.name} />}
                           
+                          {/* Fallback for unknown types */}
+                          {!['banner', 'avatar', 'card_back'].includes(item.type) && (
+                              <div className="flex flex-col items-center justify-center text-slate-500">
+                                  <AlertTriangle size={32} className="mb-2"/>
+                                  <span className="text-[10px] font-mono">IMAGE N/A</span>
+                              </div>
+                          )}
+
                           {item.is_equipped && (
                             <div className="absolute top-2 right-2 bg-green-500 text-white text-[9px] font-black px-2 py-1 rounded shadow-lg uppercase flex items-center gap-1">
                               <ShieldCheck size={10} /> Equipped
@@ -148,7 +179,7 @@ const ItemShop: React.FC = () => {
                           <div className="mb-4">
                               <div className="flex justify-between items-start mb-2">
                                   <h3 className="font-bold text-white text-lg leading-tight group-hover:text-indigo-400 transition-colors">{item.name}</h3>
-                                  <span className="text-[9px] font-mono uppercase bg-slate-800 border border-slate-700 px-2 py-1 rounded text-slate-400">{item.type.replace('_', ' ')}</span>
+                                  <span className="text-[9px] font-mono uppercase bg-slate-800 border border-slate-700 px-2 py-1 rounded text-slate-400">{(item.type || 'item').replace('_', ' ')}</span>
                               </div>
                               <p className="text-slate-500 text-xs leading-relaxed line-clamp-2">{item.description}</p>
                           </div>
@@ -194,6 +225,7 @@ const ItemShop: React.FC = () => {
       <AnimatePresence>
         {selectedItem && dashboard?.profile && (
           <motion.div
+            key="modal-overlay"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -201,6 +233,7 @@ const ItemShop: React.FC = () => {
             onClick={() => !processing && setSelectedItem(null)}
           >
             <motion.div
+              key="modal-content"
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
@@ -225,7 +258,7 @@ const ItemShop: React.FC = () => {
                      </div>
                      <div>
                         <h2 className="text-2xl font-bold text-white mb-1">{selectedItem.name}</h2>
-                        <span className="bg-slate-800 text-slate-400 text-[10px] px-2 py-1 rounded uppercase font-bold">{selectedItem.type.replace('_', ' ')}</span>
+                        <span className="bg-slate-800 text-slate-400 text-[10px] px-2 py-1 rounded uppercase font-bold">{(selectedItem.type || 'Item').replace('_', ' ')}</span>
                         <p className="text-slate-500 text-sm mt-3">{selectedItem.description}</p>
                      </div>
                   </div>

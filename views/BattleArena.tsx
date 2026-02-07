@@ -2,13 +2,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useGame } from '../context/GameContext';
 import { supabase } from '../supabaseClient';
-import { Deck, BattleState, Friend } from '../types';
+import { Deck, BattleState, Friend, Card } from '../types';
 import CardDisplay from '../components/CardDisplay';
-import { Sword, Zap, ChevronRight, Trophy, RotateCcw, Activity, Layout, Skull, Users, Cpu, ShieldAlert, Crosshair } from 'lucide-react';
+import { Sword, Zap, ChevronRight, Trophy, RotateCcw, Activity, Layout, Skull, Users, Cpu, ShieldAlert, Crosshair, Heart } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+interface DamageNumber {
+  id: string;
+  value: number;
+  x: number;
+  y: number;
+  isCrit: boolean;
+  target: 'player' | 'opponent';
+}
+
 const BattleArena: React.FC = () => {
-  const { user } = useGame();
+  const { user, refreshDashboard } = useGame();
   const [userDecks, setUserDecks] = useState<Deck[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
   
@@ -18,6 +27,10 @@ const BattleArena: React.FC = () => {
   const [selectedDeck, setSelectedDeck] = useState<Deck | null>(null);
   const [selectedOpponent, setSelectedOpponent] = useState<{name: string, avatar?: string, id?: string} | null>(null);
 
+  // Battle Logic State
+  const [playerPower, setPlayerPower] = useState(0);
+  const [attackingCardIndex, setAttackingCardIndex] = useState<number | null>(null);
+
   const [battle, setBattle] = useState<BattleState>({
     playerHP: 100,
     opponentHP: 100,
@@ -25,10 +38,14 @@ const BattleArena: React.FC = () => {
     log: ['BATTLE SYSTEM INITIALIZED'],
     isFinished: false
   });
+
+  const [rewards, setRewards] = useState<{xp: number, gold: number} | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   
   // Animation states
   const [shakePlayer, setShakePlayer] = useState(false);
   const [shakeOpponent, setShakeOpponent] = useState(false);
+  const [damageNumbers, setDamageNumbers] = useState<DamageNumber[]>([]);
 
   const battleLogEndRef = useRef<HTMLDivElement>(null);
 
@@ -52,9 +69,31 @@ const BattleArena: React.FC = () => {
     loadData();
   }, [user]);
 
+  const calculatePower = (cards: Card[]) => {
+    return cards.reduce((total, card) => {
+        let statSum = (card.attack || 0) + (card.defense || 0) + (card.hp || 0);
+        if (statSum === 0) statSum = 10;
+        let rarityMult = 1;
+        switch(card.rarity) {
+            case 'Uncommon': rarityMult = 1.2; break;
+            case 'Rare': rarityMult = 1.5; break;
+            case 'Super-Rare': rarityMult = 2.0; break;
+            case 'Mythic': rarityMult = 3.0; break;
+            case 'Divine': rarityMult = 5.0; break;
+        }
+        return total + Math.floor(statSum * rarityMult);
+    }, 0);
+  };
+
   const initiateBattleSequence = (deck: Deck) => {
     setSelectedDeck(deck);
+    setRewards(null);
+    setSubmitting(false);
     
+    // Calculate Deck Power for Damage Scaling
+    const power = calculatePower(deck.cards || []);
+    setPlayerPower(power);
+
     // Default PvE Opponent
     let opponent: { name: string; avatar?: string; id?: string } = { name: 'SYSTEM_GUARDIAN' };
     
@@ -68,10 +107,48 @@ const BattleArena: React.FC = () => {
       playerHP: 100,
       opponentHP: 100,
       turn: 'player',
-      log: [`CONNECTION ESTABLISHED`, `HOST: ${user?.user_metadata?.full_name || 'OPERATIVE'}`, `TARGET: ${opponent.name}`],
+      log: [`CONNECTION ESTABLISHED`, `HOST: ${user?.user_metadata?.full_name || 'OPERATIVE'}`, `TARGET: ${opponent.name}`, `SQUAD POWER: ${power}`],
       isFinished: false
     });
     setPhase('battle');
+  };
+
+  const spawnDamageText = (value: number, isCrit: boolean, target: 'player' | 'opponent') => {
+    const id = Math.random().toString(36);
+    // Randomize position slightly
+    const x = Math.random() * 40 - 20;
+    const y = Math.random() * 20 - 10;
+    
+    setDamageNumbers(prev => [...prev, { id, value, isCrit, target, x, y }]);
+    
+    setTimeout(() => {
+      setDamageNumbers(prev => prev.filter(d => d.id !== id));
+    }, 1000);
+  };
+
+  const submitResults = async (winner: 'player' | 'opponent') => {
+    if (!user || submitting) return;
+    setSubmitting(true);
+
+    try {
+      const { data, error } = await supabase.rpc('submit_battle_result', {
+         p_winner_id: winner === 'player' ? user.id : (selectedOpponent?.id || 'cpu'),
+         p_loser_id: winner === 'player' ? (selectedOpponent?.id || 'cpu') : user.id,
+         p_is_pve: gameMode === 'pve'
+      });
+
+      if (!error && data) {
+         setRewards({ xp: data.xp_earned || 0, gold: data.gold_earned || 0 });
+         await refreshDashboard();
+      } else {
+         // Fallback visuals if RPC fails or is void
+         setRewards({ xp: winner === 'player' ? 100 : 25, gold: winner === 'player' ? 50 : 10 });
+      }
+    } catch (e) {
+      console.error("Battle submission error", e);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const executeTurn = (playerMove: boolean) => {
@@ -79,25 +156,58 @@ const BattleArena: React.FC = () => {
 
     setBattle(prev => {
       const isPlayerTurn = prev.turn === 'player';
-      const damage = Math.floor(Math.random() * 15) + 5;
-      const crit = Math.random() > 0.8;
-      const finalDamage = crit ? damage * 2 : damage;
+      
+      // Calculate Damage based on Power Scaling
+      // Base logic: Power ranges from ~50 (starter) to ~1000 (godly)
+      // HP is 100. We want battle to last 3-6 turns.
+      // Avg dmg should be around 15-25.
+      
+      let baseDmg = 0;
+      if (isPlayerTurn) {
+          // Player damage scales with deck power
+          // Divisor 10 means 100 power -> 10 dmg (+variance)
+          // Divisor 5 means 100 power -> 20 dmg
+          const powerFactor = Math.max(1, Math.floor(playerPower / 8));
+          baseDmg = powerFactor;
+          
+          // Animate a random card "attacking"
+          if (selectedDeck?.cards?.length) {
+              const cardIdx = Math.floor(Math.random() * selectedDeck.cards.length);
+              setAttackingCardIndex(cardIdx);
+              setTimeout(() => setAttackingCardIndex(null), 500);
+          }
+      } else {
+          // Opponent damage
+          // For PvE, scale based on player power to keep it challenging but beatable
+          // For PvP, theoretically we should fetch opponent deck power, but here we simulate.
+          const opponentPower = gameMode === 'pve' ? Math.floor(playerPower * 0.9) : playerPower;
+          const powerFactor = Math.max(1, Math.floor(opponentPower / 8));
+          baseDmg = powerFactor;
+      }
+
+      const variance = Math.floor(Math.random() * 8) - 4; // +/- 4 variance
+      let damage = Math.max(1, baseDmg + variance);
+      
+      const crit = Math.random() > 0.85;
+      if (crit) damage = Math.floor(damage * 1.5);
       
       const attackerName = isPlayerTurn ? 'YOU' : (selectedOpponent?.name || 'ENEMY');
 
       const nextLog = [...prev.log, 
-        `${attackerName} ${crit ? 'CRITICALLY HIT' : 'HIT'} FOR ${finalDamage} DMG`
+        `${attackerName} ${crit ? 'CRITICALLY HIT' : 'HIT'} FOR ${damage} DMG`
       ];
 
-      const newOpponentHP = isPlayerTurn ? Math.max(0, prev.opponentHP - finalDamage) : prev.opponentHP;
-      const newPlayerHP = !isPlayerTurn ? Math.max(0, prev.playerHP - finalDamage) : prev.playerHP;
+      const newOpponentHP = isPlayerTurn ? Math.max(0, prev.opponentHP - damage) : prev.opponentHP;
+      const newPlayerHP = !isPlayerTurn ? Math.max(0, prev.playerHP - damage) : prev.playerHP;
       
       // Trigger animations
       if (isPlayerTurn) {
          setShakeOpponent(true);
+         spawnDamageText(damage, crit, 'opponent');
          setTimeout(() => setShakeOpponent(false), 500);
       } else {
          setShakePlayer(true);
+         spawnDamageText(damage, crit, 'player');
          setTimeout(() => setShakePlayer(false), 500);
       }
       
@@ -106,6 +216,8 @@ const BattleArena: React.FC = () => {
 
       if (finished) {
         nextLog.push(`SESSION TERMINATED. WINNER: ${winner === 'player' ? 'YOU' : selectedOpponent?.name}`);
+        // Submit results asynchronously
+        setTimeout(() => submitResults(winner!), 500);
       }
 
       return {
@@ -129,6 +241,7 @@ const BattleArena: React.FC = () => {
           winner: 'opponent',
           log: [...prev.log, 'MISSION ABORTED BY USER.']
       }));
+      submitResults('opponent');
   };
 
   // Auto opponent turn
@@ -265,27 +378,32 @@ const BattleArena: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {userDecks.map(deck => (
-              <button 
-                key={deck.id}
-                onClick={() => initiateBattleSequence(deck)}
-                className="group relative glass p-8 rounded-sm border-2 border-slate-800 hover:border-indigo-500 transition-all text-left overflow-hidden"
-              >
-                <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                  <Sword size={120} />
-                </div>
-                <div className="relative z-10">
-                   <h3 className="text-xl font-heading font-black text-white mb-2">{deck.name}</h3>
-                   <div className="flex gap-2 mb-6">
-                      <div className="px-3 py-1 bg-slate-950 border border-slate-800 text-[10px] font-black text-indigo-400">{(deck.card_ids || []).length} CARDS</div>
-                      <div className="px-3 py-1 bg-slate-950 border border-slate-800 text-[10px] font-black text-slate-500 uppercase tracking-widest font-mono">READY</div>
-                   </div>
-                   <div className="flex items-center gap-2 text-indigo-500 font-heading text-[10px] group-hover:translate-x-2 transition-transform">
-                     DEPLOY SQUAD <ChevronRight size={14} />
-                   </div>
-                </div>
-              </button>
-            ))}
+            {userDecks.map(deck => {
+                const deckPower = calculatePower(deck.cards || []);
+                return (
+                  <button 
+                    key={deck.id}
+                    onClick={() => initiateBattleSequence(deck)}
+                    className="group relative glass p-8 rounded-sm border-2 border-slate-800 hover:border-indigo-500 transition-all text-left overflow-hidden"
+                  >
+                    <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                      <Sword size={120} />
+                    </div>
+                    <div className="relative z-10">
+                       <h3 className="text-xl font-heading font-black text-white mb-2">{deck.name}</h3>
+                       <div className="flex gap-2 mb-6">
+                          <div className="px-3 py-1 bg-slate-950 border border-slate-800 text-[10px] font-black text-indigo-400">{(deck.card_ids || []).length} CARDS</div>
+                          <div className="px-3 py-1 bg-slate-950 border border-slate-800 text-[10px] font-black text-yellow-500 flex items-center gap-1">
+                             <Zap size={10} /> PWR {deckPower}
+                          </div>
+                       </div>
+                       <div className="flex items-center gap-2 text-indigo-500 font-heading text-[10px] group-hover:translate-x-2 transition-transform">
+                         DEPLOY SQUAD <ChevronRight size={14} />
+                       </div>
+                    </div>
+                  </button>
+                )
+            })}
           </div>
         )}
       </div>
@@ -295,7 +413,27 @@ const BattleArena: React.FC = () => {
   // --- BATTLE PHASE ---
 
   return (
-    <div className="min-h-[80vh] flex flex-col gap-8 pb-20 animate-fade-in">
+    <div className="min-h-[80vh] flex flex-col gap-8 pb-20 animate-fade-in relative">
+       {/* Floating Damage Numbers */}
+       <AnimatePresence>
+          {damageNumbers.map(dn => (
+            <motion.div
+              key={dn.id}
+              initial={{ opacity: 1, y: 0, scale: 0.5 }}
+              animate={{ opacity: 0, y: -50, scale: dn.isCrit ? 1.5 : 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 1 }}
+              className={`absolute z-50 font-black pointer-events-none drop-shadow-lg text-4xl font-heading
+                ${dn.target === 'player' ? 'text-red-500 left-1/4' : 'text-yellow-400 right-1/4'}
+              `}
+              style={{ top: '30%', left: dn.target === 'player' ? '25%' : '75%', transform: `translate(${dn.x}px, ${dn.y}px)` }}
+            >
+               {dn.value}
+               {dn.isCrit && <span className="text-sm block text-center text-white">CRIT!</span>}
+            </motion.div>
+          ))}
+       </AnimatePresence>
+
        {/* Arena Layout */}
        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch flex-1">
           
@@ -312,13 +450,21 @@ const BattleArena: React.FC = () => {
                      className={`h-full rounded-sm shadow-lg ${battle.playerHP < 30 ? 'bg-red-500 shadow-red-500/50' : 'bg-indigo-500 shadow-indigo-500/50'}`} 
                    />
                 </div>
+                <div className="flex justify-between items-center bg-slate-950/50 px-3 py-1 rounded border border-slate-800/50">
+                    <span className="text-[10px] text-slate-500 font-black uppercase">SQUAD POWER</span>
+                    <span className="text-yellow-400 font-bold font-mono flex items-center gap-1"><Zap size={10}/> {playerPower}</span>
+                </div>
              </div>
 
              <div className="flex flex-wrap gap-2 justify-center py-8">
                 {selectedDeck?.cards ? selectedDeck.cards.map((card, i) => (
-                  <div key={i} className="scale-75 origin-bottom opacity-80 hover:opacity-100 hover:scale-90 transition-all">
+                  <motion.div 
+                    key={i} 
+                    animate={attackingCardIndex === i ? { y: -30, scale: 1.1, zIndex: 10 } : { y: 0, scale: 0.75, zIndex: 1 }}
+                    className={`origin-bottom transition-all cursor-pointer ${attackingCardIndex === i ? 'opacity-100 drop-shadow-[0_0_15px_rgba(234,179,8,0.5)]' : 'opacity-80 hover:opacity-100 hover:scale-90'}`}
+                  >
                      <CardDisplay card={card} size="sm" />
-                  </div>
+                  </motion.div>
                 )) : (
                   <div className="text-[10px] font-mono text-slate-700">BIOMETRIC ASSETS LOADED</div>
                 )}
@@ -376,6 +522,10 @@ const BattleArena: React.FC = () => {
                       className={`h-full rounded-sm shadow-lg ml-auto ${battle.opponentHP < 30 ? 'bg-red-500 shadow-red-500/50' : 'bg-red-600 shadow-red-600/50'}`} 
                    />
                 </div>
+                <div className="flex justify-between items-center bg-slate-950/50 px-3 py-1 rounded border border-slate-800/50">
+                    <span className="text-yellow-400 font-bold font-mono flex items-center gap-1"><Zap size={10}/> {gameMode === 'pve' ? Math.floor(playerPower * 0.9) : '???' }</span>
+                    <span className="text-[10px] text-slate-500 font-black uppercase">THREAT LEVEL</span>
+                </div>
              </div>
 
              <div className="flex flex-wrap gap-2 justify-center py-8 opacity-40 grayscale group-hover:grayscale-0">
@@ -404,7 +554,9 @@ const BattleArena: React.FC = () => {
              animate={{ opacity: 1, scale: 1 }}
              className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4"
            >
-              <div className={`max-w-md w-full p-12 rounded-sm border-2 text-center shadow-2xl ${battle.winner === 'player' ? 'border-green-500 bg-green-500/10' : 'border-red-500 bg-red-500/10'}`}>
+              <div className={`max-w-md w-full p-12 rounded-sm border-2 text-center shadow-2xl relative overflow-hidden ${battle.winner === 'player' ? 'border-green-500 bg-green-900/20' : 'border-red-500 bg-red-900/20'}`}>
+                 <div className="absolute inset-0 bg-space opacity-50 -z-10"></div>
+                 
                  <div className="mb-6">
                    {battle.winner === 'player' ? <Trophy size={80} className="mx-auto text-yellow-400 drop-shadow-lg" /> : <RotateCcw size={80} className="mx-auto text-red-500 drop-shadow-lg" />}
                  </div>
@@ -413,9 +565,24 @@ const BattleArena: React.FC = () => {
                  </h2>
                  <p className="text-slate-400 font-mono text-xs uppercase tracking-widest mb-10">Combat session terminated.</p>
                  
-                 <div className="bg-slate-950/50 p-6 border border-slate-800 mb-8">
-                    <div className="text-[10px] text-slate-500 font-mono uppercase mb-2">XP EARNED</div>
-                    <div className="text-4xl font-heading text-indigo-400">{battle.winner === 'player' ? '+250' : '+50'}</div>
+                 <div className="bg-slate-950/80 p-6 border border-slate-800 mb-8 backdrop-blur-sm">
+                    {submitting ? (
+                        <div className="flex flex-col items-center">
+                            <div className="animate-spin h-6 w-6 border-2 border-indigo-500 border-t-transparent rounded-full mb-2"></div>
+                            <div className="text-[10px] text-slate-500 font-mono uppercase">Submitting Battle Results...</div>
+                        </div>
+                    ) : (
+                        <div className="flex justify-around">
+                            <div>
+                                <div className="text-[10px] text-slate-500 font-mono uppercase mb-1">XP EARNED</div>
+                                <div className="text-3xl font-heading text-indigo-400">{rewards ? `+${rewards.xp}` : '---'}</div>
+                            </div>
+                            <div>
+                                <div className="text-[10px] text-slate-500 font-mono uppercase mb-1">GOLD EARNED</div>
+                                <div className="text-3xl font-heading text-yellow-400">{rewards ? `+${rewards.gold}` : '---'}</div>
+                            </div>
+                        </div>
+                    )}
                  </div>
 
                  <div className="flex flex-col gap-4">

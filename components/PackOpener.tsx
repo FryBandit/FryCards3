@@ -17,17 +17,21 @@ const PackOpener: React.FC<PackOpenerProps> = ({ packResult, onClose, packImage 
   const [revealedCards, setRevealedCards] = useState<number[]>([]);
   const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
-  // Audio Instances (Initialized once per lifecycle)
-  const sfx = useMemo(() => ({
-    hover: new Audio(SOUNDS.HOVER),
-    click: new Audio(SOUNDS.CLICK),
-    shake: new Audio(SOUNDS.PACK_SHAKE),
-    open: new Audio(SOUNDS.PACK_OPEN),
-    revealCommon: new Audio(SOUNDS.REVEAL_COMMON),
-    revealRare: new Audio(SOUNDS.REVEAL_RARE),
-    revealLegendary: new Audio(SOUNDS.REVEAL_LEGENDARY),
-    success: new Audio(SOUNDS.SUCCESS)
-  }), []);
+  // Audio Instances (Initialized once per lifecycle, strictly checking for valid sources)
+  const sfx = useMemo(() => {
+    const createAudio = (src: string) => (src && src.length > 0 ? new Audio(src) : null);
+    
+    return {
+      hover: createAudio(SOUNDS.HOVER),
+      click: createAudio(SOUNDS.CLICK),
+      shake: createAudio(SOUNDS.PACK_SHAKE),
+      open: createAudio(SOUNDS.PACK_OPEN),
+      revealCommon: createAudio(SOUNDS.REVEAL_COMMON),
+      revealRare: createAudio(SOUNDS.REVEAL_RARE),
+      revealLegendary: createAudio(SOUNDS.REVEAL_LEGENDARY),
+      success: createAudio(SOUNDS.SUCCESS)
+    };
+  }, []);
 
   useEffect(() => {
     const handleResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
@@ -36,8 +40,10 @@ const PackOpener: React.FC<PackOpenerProps> = ({ packResult, onClose, packImage 
       window.removeEventListener('resize', handleResize);
       // Clean up audio
       Object.values(sfx).forEach(audio => {
-        audio.pause();
-        audio.src = "";
+        if (audio) {
+          audio.pause();
+          audio.src = "";
+        }
       });
     };
   }, [sfx]);
@@ -48,14 +54,18 @@ const PackOpener: React.FC<PackOpenerProps> = ({ packResult, onClose, packImage 
 
   useEffect(() => {
     if (packResult) {
-      sfx.shake.volume = 0.5;
-      sfx.shake.play().catch(() => {});
+      if (sfx.shake) {
+        sfx.shake.volume = 0.5;
+        sfx.shake.play().catch(() => {});
+      }
       triggerHaptic([50, 50, 50, 50]);
 
       const t1 = setTimeout(() => {
         setStage('opening');
-        sfx.open.volume = 0.6;
-        sfx.open.play().catch(() => {});
+        if (sfx.open) {
+          sfx.open.volume = 0.6;
+          sfx.open.play().catch(() => {});
+        }
         triggerHaptic(200);
       }, 1200);
 
@@ -71,13 +81,13 @@ const PackOpener: React.FC<PackOpenerProps> = ({ packResult, onClose, packImage 
       const card = packResult?.cards[index];
       if (card) {
         if (['Mythic', 'Divine'].includes(card.rarity)) {
-           sfx.revealLegendary.play().catch(() => {});
+           sfx.revealLegendary?.play().catch(() => {});
            triggerHaptic([100, 50, 100]);
         } else if (['Rare', 'Super-Rare'].includes(card.rarity)) {
-           sfx.revealRare.play().catch(() => {});
+           sfx.revealRare?.play().catch(() => {});
            triggerHaptic(50);
         } else {
-           sfx.revealCommon.play().catch(() => {});
+           sfx.revealCommon?.play().catch(() => {});
            triggerHaptic(20);
         }
       }
@@ -88,7 +98,7 @@ const PackOpener: React.FC<PackOpenerProps> = ({ packResult, onClose, packImage 
     if (packResult && revealedCards.length === packResult.cards.length && stage === 'revealing') {
       const t = setTimeout(() => {
         setStage('summary');
-        sfx.success.play().catch(() => {});
+        sfx.success?.play().catch(() => {});
       }, 1200);
       return () => clearTimeout(t);
     }

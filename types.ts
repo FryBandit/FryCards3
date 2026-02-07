@@ -219,6 +219,17 @@ export interface ShopItem {
   is_owned: boolean;
   is_equipped: boolean;
   rarity: 'Common' | 'Rare' | 'Legendary';
+  user_item_id?: string; // The specific instance ID needed for equipping
+}
+
+export interface CardBack {
+  id: string;
+  name: string;
+  description: string;
+  image_url: string;
+  price: number;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface PublicProfile {

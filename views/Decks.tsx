@@ -1,10 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { useGame } from '../context/GameContext';
 import { supabase } from '../supabaseClient';
 import { Card, Deck } from '../types';
 import CardDisplay from '../components/CardDisplay';
-import { Plus, Save, Trash2, Layout, AlertCircle, Search } from 'lucide-react';
+import { Plus, Save, Trash2, Layout, AlertCircle, Search, Edit2, Zap } from 'lucide-react';
 
 const Decks: React.FC = () => {
   const { user, showToast } = useGame();
@@ -14,6 +15,9 @@ const Decks: React.FC = () => {
   const [deckName, setDeckName] = useState('UNNAMED SQUAD');
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Editing State
+  const [editingDeckId, setEditingDeckId] = useState<string | null>(null);
 
   const DECK_SIZE = 5;
 
@@ -38,6 +42,26 @@ const Decks: React.FC = () => {
     loadData();
   }, [user]);
 
+  // Calculate Power Level of active deck
+  const squadPower = useMemo(() => {
+    return activeDeck.reduce((total, card) => {
+        // Simple heuristic: rarity multiplier + stats if available
+        let statSum = (card.attack || 0) + (card.defense || 0) + (card.hp || 0);
+        if (statSum === 0) statSum = 10; // Base value if stats missing
+        
+        let rarityMult = 1;
+        switch(card.rarity) {
+            case 'Uncommon': rarityMult = 1.2; break;
+            case 'Rare': rarityMult = 1.5; break;
+            case 'Super-Rare': rarityMult = 2.0; break;
+            case 'Mythic': rarityMult = 3.0; break;
+            case 'Divine': rarityMult = 5.0; break;
+        }
+        
+        return total + Math.floor(statSum * rarityMult);
+    }, 0);
+  }, [activeDeck]);
+
   const addToDeck = (card: Card) => {
     if (activeDeck.length >= DECK_SIZE) {
       showToast('Deck reached capacity (5 cards)', 'info');
@@ -52,6 +76,26 @@ const Decks: React.FC = () => {
     setActiveDeck(newDeck);
   };
 
+  const handleEditDeck = async (deck: Deck) => {
+      setEditingDeckId(deck.id);
+      setDeckName(deck.name);
+      
+      // Need to find full card objects from collection based on IDs
+      // Note: If card was sold, it might be missing.
+      if (deck.card_ids && collection.length > 0) {
+          const loadedCards = deck.card_ids.map(id => collection.find(c => c.id === id)).filter(Boolean) as Card[];
+          setActiveDeck(loadedCards);
+      } else {
+          setActiveDeck([]); 
+      }
+  };
+
+  const resetEditor = () => {
+      setEditingDeckId(null);
+      setDeckName('UNNAMED SQUAD');
+      setActiveDeck([]);
+  };
+
   const handleDeleteDeck = async (deckId: string) => {
     if (!user) return;
     if (!confirm('Are you sure you want to delete this deck?')) return;
@@ -64,6 +108,7 @@ const Decks: React.FC = () => {
 
         if (error) throw error;
         setDecks(prev => prev.filter(d => d.id !== deckId));
+        if (editingDeckId === deckId) resetEditor();
         showToast('Deck deleted', 'success');
     } catch (e: any) {
         showToast(e.message, 'error');
@@ -78,21 +123,31 @@ const Decks: React.FC = () => {
     }
     
     try {
-      const { data, error } = await supabase.rpc('create_deck', {
-        p_user_id: user.id,
-        p_name: deckName,
-        p_card_ids: activeDeck.map(c => c.id)
-      });
-      
-      if (error) throw error;
-      showToast('Deck saved successfully!', 'success');
+      if (editingDeckId) {
+          // Update Existing
+          const { error } = await supabase.rpc('update_deck', {
+              p_deck_id: editingDeckId,
+              p_name: deckName,
+              p_card_ids: activeDeck.map(c => c.id)
+          });
+          if (error) throw error;
+          showToast('Deck updated successfully!', 'success');
+      } else {
+          // Create New
+          const { error } = await supabase.rpc('create_deck', {
+            p_user_id: user.id,
+            p_name: deckName,
+            p_card_ids: activeDeck.map(c => c.id)
+          });
+          if (error) throw error;
+          showToast('Deck created successfully!', 'success');
+      }
       
       // Refresh decks list
       const { data: newDecks } = await supabase.from('decks').select('*').eq('user_id', user.id);
       if (newDecks) setDecks(newDecks);
       
-      setActiveDeck([]);
-      setDeckName('UNNAMED SQUAD');
+      resetEditor();
     } catch (e: any) {
       showToast(e.message, 'error');
     }
@@ -117,19 +172,30 @@ const Decks: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left: Deck Assembly */}
         <div className="lg:col-span-4 space-y-6">
-          <div className="glass p-8 rounded-sm border-2 border-slate-800 bg-slate-900/80 sticky top-24">
+          <div className="glass p-8 rounded-sm border-2 border-slate-800 bg-slate-900/80 sticky top-24 transition-all">
+            {editingDeckId && (
+                <div className="mb-4 bg-indigo-600/20 border border-indigo-500/50 p-2 rounded text-[10px] font-bold text-indigo-300 uppercase text-center flex items-center justify-center gap-2">
+                    <Edit2 size={12} /> Editing Mode Active
+                </div>
+            )}
+            
             <label className="text-[10px] font-black text-slate-500 uppercase block mb-4 tracking-widest font-mono">Squad Name</label>
             <input 
               type="text" 
               value={deckName}
               onChange={e => setDeckName(e.target.value.toUpperCase())}
-              className="w-full bg-slate-950 border-2 border-slate-800 p-4 font-heading text-xs text-indigo-400 focus:border-indigo-500 outline-none mb-8"
+              className="w-full bg-slate-950 border-2 border-slate-800 p-4 font-heading text-xs text-indigo-400 focus:border-indigo-500 outline-none mb-4"
             />
 
             <div className="space-y-4">
-              <div className="flex justify-between text-[10px] font-black text-slate-500 uppercase font-mono">
+              <div className="flex justify-between items-center text-[10px] font-black text-slate-500 uppercase font-mono bg-slate-950 p-2 rounded border border-slate-800">
                 <span>Composition</span>
-                <span>{activeDeck.length} / {DECK_SIZE}</span>
+                <span className={activeDeck.length === DECK_SIZE ? 'text-green-400' : 'text-slate-300'}>{activeDeck.length} / {DECK_SIZE}</span>
+              </div>
+
+              <div className="flex justify-between items-center text-[10px] font-black text-slate-500 uppercase font-mono bg-slate-950 p-2 rounded border border-slate-800">
+                <span className="flex items-center gap-1"><Zap size={12} className="text-yellow-500" /> Squad Power</span>
+                <span className="text-white text-lg font-heading">{squadPower}</span>
               </div>
               
               <div className="min-h-[300px] border-2 border-dashed border-slate-800 rounded-sm p-4 space-y-2">
@@ -140,9 +206,9 @@ const Decks: React.FC = () => {
                   </div>
                 ) : (
                   activeDeck.map((card, idx) => (
-                    <div key={`${card.id}-${idx}`} className="flex items-center gap-3 p-3 bg-slate-950 border border-slate-800 rounded-sm group">
+                    <div key={`${card.id}-${idx}`} className="flex items-center gap-3 p-3 bg-slate-950 border border-slate-800 rounded-sm group hover:border-slate-600 transition-colors">
                        <img src={card.image_url} className="w-10 h-10 object-cover rounded-sm border border-slate-700" alt="" />
-                       <div className="flex-1">
+                       <div className="flex-1 min-w-0">
                           <div className="text-[10px] font-black text-white uppercase truncate">{card.name}</div>
                           <div className="text-[8px] font-mono text-slate-500">{card.rarity}</div>
                        </div>
@@ -155,13 +221,23 @@ const Decks: React.FC = () => {
               </div>
             </div>
 
-            <button 
-              disabled={activeDeck.length < DECK_SIZE}
-              onClick={handleSaveDeck}
-              className="w-full mt-8 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-30 text-white py-5 rounded-sm font-heading font-black text-xs shadow-[4px_4px_0_rgba(0,0,0,0.5)] active:translate-y-1 active:shadow-none transition-all flex items-center justify-center gap-3"
-            >
-              <Save size={16} /> SAVE SQUAD
-            </button>
+            <div className="flex gap-2 mt-8">
+                {editingDeckId && (
+                    <button 
+                        onClick={resetEditor}
+                        className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-400 py-5 rounded-sm font-heading font-black text-xs"
+                    >
+                        CANCEL
+                    </button>
+                )}
+                <button 
+                disabled={activeDeck.length < DECK_SIZE}
+                onClick={handleSaveDeck}
+                className="flex-[2] bg-indigo-600 hover:bg-indigo-500 disabled:opacity-30 text-white py-5 rounded-sm font-heading font-black text-xs shadow-[4px_4px_0_rgba(0,0,0,0.5)] active:translate-y-1 active:shadow-none transition-all flex items-center justify-center gap-3"
+                >
+                <Save size={16} /> {editingDeckId ? 'UPDATE' : 'SAVE'}
+                </button>
+            </div>
           </div>
           
           {/* Existing Decks List */}
@@ -169,9 +245,16 @@ const Decks: React.FC = () => {
              <h3 className="font-heading text-xs text-white mb-4">EXISTING SQUADS</h3>
              <div className="space-y-2">
                 {decks.map(deck => (
-                    <div key={deck.id} className="flex justify-between items-center p-3 bg-slate-950/50 border border-slate-800 rounded-sm">
-                        <span className="font-bold text-slate-300 text-xs">{deck.name}</span>
-                        <button onClick={() => handleDeleteDeck(deck.id)} className="text-slate-600 hover:text-red-500"><Trash2 size={14}/></button>
+                    <div 
+                        key={deck.id} 
+                        onClick={() => handleEditDeck(deck)}
+                        className={`flex justify-between items-center p-3 border rounded-sm cursor-pointer transition-all hover:bg-slate-800 ${editingDeckId === deck.id ? 'bg-indigo-900/30 border-indigo-500' : 'bg-slate-950/50 border-slate-800'}`}
+                    >
+                        <div>
+                            <span className="font-bold text-slate-300 text-xs block">{deck.name}</span>
+                            <span className="text-[9px] text-slate-500 font-mono">{(deck.card_ids||[]).length} Assets</span>
+                        </div>
+                        <button onClick={(e) => { e.stopPropagation(); handleDeleteDeck(deck.id); }} className="text-slate-600 hover:text-red-500 p-2"><Trash2 size={14}/></button>
                     </div>
                 ))}
                 {decks.length === 0 && <p className="text-slate-500 text-xs italic">No decks saved.</p>}
@@ -198,12 +281,12 @@ const Decks: React.FC = () => {
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
               {filteredCollection.length > 0 ? filteredCollection.map(card => (
                 <div key={card.id} className="relative group flex flex-col items-center">
-                   <div className="transform transition-all group-hover:-translate-y-2">
-                     <CardDisplay card={card} size="sm" onClick={() => addToDeck(card)} />
+                   <div className="transform transition-all group-hover:-translate-y-2 cursor-pointer" onClick={() => addToDeck(card)}>
+                     <CardDisplay card={card} size="sm" />
                    </div>
                    <button 
                      onClick={() => addToDeck(card)}
-                     className="absolute -bottom-2 opacity-0 group-hover:opacity-100 transition-all bg-indigo-500 text-white p-2 rounded-full shadow-xl border-2 border-slate-900"
+                     className="absolute -bottom-2 opacity-0 group-hover:opacity-100 transition-all bg-indigo-500 text-white p-2 rounded-full shadow-xl border-2 border-slate-900 hover:scale-110"
                    >
                      <Plus size={16} />
                    </button>
