@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Gift, X, Flame, Check } from 'lucide-react';
-import { supabase } from '../supabaseClient';
 import { useGame } from '../context/GameContext';
 import { DailyRewardResult } from '../types';
+import { callEdge } from '../utils/edgeFunctions';
 
 interface DailyRewardModalProps {
   isOpen: boolean;
@@ -21,11 +21,7 @@ const DailyRewardModal: React.FC<DailyRewardModalProps> = ({ isOpen, onClose, st
 
     setClaiming(true);
     try {
-      const { data, error } = await supabase.rpc('claim_daily_reward', {
-        p_user_id: user.id
-      });
-
-      if (error) throw error;
+      const data = await callEdge<DailyRewardResult>('claim-daily-reward');
       setReward(data);
       await refreshDashboard();
       

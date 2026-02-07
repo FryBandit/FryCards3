@@ -1,5 +1,3 @@
-
-
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { PackType, PackResult, AffordabilityCheck, Card, CardBack } from '../types';
@@ -8,6 +6,7 @@ import { Coins, Diamond, ShieldCheck, Sparkle, AlertTriangle, Eye, Sparkles, X, 
 import PackOpener from '../components/PackOpener';
 import CardDisplay from '../components/CardDisplay';
 import { AnimatePresence, motion } from 'framer-motion';
+import { callEdge } from '../utils/edgeFunctions';
 
 const Shop: React.FC = () => {
   const { user, refreshDashboard, dashboard, showToast } = useGame();
@@ -145,26 +144,7 @@ const Shop: React.FC = () => {
     setPurchasingBackId(cardBack.id);
 
     try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const jwt = session?.access_token;
-        
-        if (!jwt) throw new Error("Secure session token missing.");
-
-        const resp = await fetch('https://eqhuacksgeqywlvtyely.supabase.co/functions/v1/purchase-card-back', {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${jwt}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ card_back_id: cardBack.id })
-        });
-
-        const result = await resp.json();
-
-        if (!resp.ok) {
-            throw new Error(result?.error || 'Purchase failed');
-        }
-
+        await callEdge('purchase-card-back', { card_back_id: cardBack.id });
         showToast(`${cardBack.name} purchased successfully!`, 'success');
         await refreshDashboard();
     } catch (e: any) {

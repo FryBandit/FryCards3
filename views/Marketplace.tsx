@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { useGame } from '../context/GameContext';
@@ -7,6 +6,7 @@ import CardDisplay from '../components/CardDisplay';
 import { Search, Filter, Gavel, Plus, X, ChevronLeft, ChevronRight, Activity, Trash2, Coins, Diamond, RefreshCw, ArrowUpDown, Tag } from 'lucide-react';
 import { RARITY_COLORS } from '../constants';
 import { motion, AnimatePresence } from 'framer-motion';
+import { callEdge } from '../utils/edgeFunctions';
 
 const Marketplace: React.FC = () => {
   const { user, refreshDashboard, showToast, dashboard } = useGame();
@@ -179,11 +179,7 @@ const Marketplace: React.FC = () => {
     if (!window.confirm(`Purchase for ${listing.price} ${listing.currency}?`)) return;
 
     try {
-      const { error } = await supabase.rpc('buy_market_listing', {
-        p_listing_id: listing.id
-      });
-
-      if (error) throw error;
+      await callEdge('marketplace-buy', { listing_id: listing.id });
       
       showToast('Purchase successful!', 'success');
       fetchListings();
@@ -227,12 +223,12 @@ const Marketplace: React.FC = () => {
 
     setProcessingBid(true);
     try {
-      const { error } = await supabase.rpc('place_bid', {
-        p_listing_id: bidModalListing.id,
-        p_bid_amount: bidAmount
-      });
+      const bidPayload = {
+        listing_id: bidModalListing.id,
+        [bidModalListing.currency === 'gold' ? 'bid_gold' : 'bid_gems']: bidAmount
+      };
 
-      if (error) throw error;
+      await callEdge('marketplace-bid', bidPayload);
 
       showToast('Bid placed successfully!', 'success');
       setBidModalListing(null);
@@ -248,8 +244,7 @@ const Marketplace: React.FC = () => {
   const handleCancel = async (listingId: string) => {
     if (!window.confirm("Cancel this listing?")) return;
     try {
-        const { error } = await supabase.rpc('cancel_listing', { p_listing_id: listingId });
-        if (error) throw error;
+        await callEdge('marketplace-cancel', { listing_id: listingId });
         showToast('Listing cancelled', 'success');
         fetchListings();
         refreshDashboard();

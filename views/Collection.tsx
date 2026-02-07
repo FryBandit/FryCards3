@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { useGame } from '../context/GameContext';
@@ -7,6 +6,7 @@ import CardDisplay from '../components/CardDisplay';
 import { Filter, Trash2, ChevronLeft, ChevronRight, Search, SortAsc, Info, AlertCircle, RefreshCw, Sparkles, Coins, ShoppingBag, Eye } from 'lucide-react';
 import { RARITY_COLORS } from '../constants';
 import { Link } from 'react-router-dom';
+import { callEdge } from '../utils/edgeFunctions';
 
 const Collection: React.FC = () => {
   const { user, refreshDashboard, showToast } = useGame();
@@ -87,15 +87,13 @@ const Collection: React.FC = () => {
 
     setProcessingAction(true);
     try {
-        const { data, error } = await supabase.rpc('quicksell_card', {
-            p_user_id: user.id,
-            p_card_id: card.id,
-            p_is_foil: isFoil
+        const data = await callEdge('quicksell-card', {
+            card_id: card.id,
+            is_foil: isFoil,
+            quantity: 1
         });
-
-        if (error) throw error;
         
-        showToast(`Sold for ${data} Gold`, 'success');
+        showToast(`Sold for ${data.gold_earned} Gold`, 'success');
         
         // Update local state temporarily
         if (selectedCard && selectedCard.id === card.id) {

@@ -1,10 +1,10 @@
-
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { useGame } from '../context/GameContext';
 import { Quest, Achievement } from '../types';
 import { Target, Trophy, CheckCircle, Lock, RefreshCw, Star } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { callEdge } from '../utils/edgeFunctions';
 
 const QuestsAndAchievements: React.FC = () => {
   const { user, refreshDashboard, dashboard } = useGame();
@@ -38,11 +38,7 @@ const QuestsAndAchievements: React.FC = () => {
   const handleClaimQuest = async (questId: string) => {
     if (!user) return;
     try {
-      const { error } = await supabase.rpc('claim_quest_reward', {
-        p_quest_id: questId
-      });
-      if (error) throw error;
-      
+      await callEdge('claim-quest-reward', { quest_id: questId });
       await Promise.all([refreshDashboard(), fetchData()]);
     } catch (e: any) {
       alert(e.message);

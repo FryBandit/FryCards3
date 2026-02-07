@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { supabase } from '../supabaseClient';
 import { ShopItem } from '../types';
 import { Shirt, Coins, Diamond, Check, X, ShoppingBag, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { callEdge } from '../utils/edgeFunctions';
 
 const ItemShop: React.FC = () => {
   const { user, showToast, refreshDashboard, dashboard } = useGame();
@@ -87,14 +87,10 @@ const ItemShop: React.FC = () => {
     setProcessing(true);
 
     try {
-      // Call unified purchase RPC
-      const { data, error } = await supabase.rpc('purchase_item', { 
-          p_item_id: selectedItem.id,
-          p_quantity: 1,
-          p_currency: payWith
+      await callEdge('purchase-item', { 
+          item_id: selectedItem.id,
+          currency: payWith
       });
-
-      if (error) throw error;
 
       showToast(`${selectedItem.name} acquired successfully!`, 'success');
       
@@ -118,13 +114,9 @@ const ItemShop: React.FC = () => {
 
     setProcessing(true);
     try {
-      // The backend expects the user_item.id (instance ID), not the shop_item.id
-      const { error } = await supabase.rpc('equip_item', { 
-          p_user_id: user.id, 
-          p_user_item_id: item.user_item_id 
+      await callEdge('equip-cosmetic', { 
+          user_item_id: item.user_item_id 
       });
-      
-      if (error) throw error;
       
       showToast('Item equipped!', 'success');
       await Promise.all([fetchItems(), refreshDashboard()]);

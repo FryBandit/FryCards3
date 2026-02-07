@@ -1,10 +1,10 @@
-
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { supabase } from '../supabaseClient';
 import { Trophy, Gift, Zap, Target, Activity, RefreshCw, Sparkles, Flame, User } from 'lucide-react';
 import DailyRewardModal from '../components/DailyRewardModal';
 import { motion } from 'framer-motion';
+import { callEdge } from '../utils/edgeFunctions';
 
 const Dashboard: React.FC = () => {
   const { dashboard, refreshDashboard, user, error } = useGame();
@@ -12,9 +12,12 @@ const Dashboard: React.FC = () => {
 
   const handleCompleteMission = async (missionId: string) => {
     if (!user) return;
-    const { error } = await supabase.rpc('complete_mission', { p_user_id: user.id, p_mission_id: missionId });
-    if (error) alert(error.message);
-    else await refreshDashboard();
+    try {
+      await callEdge('claim-mission-reward', { mission_id: missionId });
+      await refreshDashboard();
+    } catch (e: any) {
+      alert(e.message);
+    }
   };
 
   if (error) return (
